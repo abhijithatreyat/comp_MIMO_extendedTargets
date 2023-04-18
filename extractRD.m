@@ -47,7 +47,7 @@ gainList  = [];
 y_r = y;
 residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
-timer = 10;
+timer = 5;
 while timer>0
     % keep detecting new sinusoids until power in residue 
     % becomes small; *** how small *** determined by *** tau ***
@@ -133,7 +133,6 @@ function [omega_range, omega_doppler, h_l, r_l, res_inf_normSq_rot] = detectNewR
    omega_range = sampledManifold.coarseOmega_range(ind_col);
    omega_doppler = angle(exp(-1j*sampledManifold.coarseOmega_doppler(ind_row))); % TODO : Verify
  
-   gain = gains(ind_col,ind_row);
 
    % compute the response corresponding to the
    % current estimate of the sinusoid

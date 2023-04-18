@@ -1,8 +1,8 @@
-function plot_targets_2D(sph_vector, omega_vect, N_tx,...
+function plot_targets_2D(true_targets, omega_vect, N_tx,...
     doppler_vect, N_chirp, detected_range, detected_targets)
 % Plots true and estimated targets in 2D space
 % Input arguments:
-% sph_vector - [N_targets x 3] matrix containing spherical coordinates of the true targets
+% true_targets -  true range, doppler and azimuth
 % omega_vect - [N_targets x 1] vector containing target angular frequencies
 % N_tx - number of transmit antennas
 % doppler_vect - [N_targets x 1] vector containing target Doppler frequencies
@@ -13,8 +13,9 @@ function plot_targets_2D(sph_vector, omega_vect, N_tx,...
 % fig_see - handle to the figure
 
     fig_see = figure();
-    true_x = sph_vector(:,3) .* cosd(omega_vect(:)*N_tx/2/pi);
-    true_y = sph_vector(:,3) .* sind(omega_vect(:)*N_tx/2/pi);
+    true_x = true_targets(:,1) .* cosd(true_targets(:,3));  
+    true_y =  true_targets(:,1) .* sind(true_targets(:,3));
+
     true_speed = mean(doppler_vect(:)*N_chirp/2/pi);
 
     det_x = detected_range' .* cosd(detected_targets(:,3));
@@ -27,8 +28,8 @@ function plot_targets_2D(sph_vector, omega_vect, N_tx,...
     hold on;
     plot(0,0,'ko');
     xlabel('x (m)'); ylabel('y (m)');
-    xlim([-1, max(max(det_x),max(true_x))+2]);
-    ylim([-2, max(max(det_y),max(true_y))+2]);
+    xlim([-1, (max(true_x)+5)]);
+    ylim([-2, (max(true_y)+5)]);
     legend('True', 'Estimated','Radar location');
     txt = ['True speed:' num2str(true_speed) 'm/s'];
     txt2 =['Estimated speed:' num2str(det_speed) 'm/s'];

@@ -86,7 +86,8 @@ chirp_slope = BW/Tc; % slope of chirp frequency ramp in Hz/s
 fc = 60e9; lambda = c/fc; % carrier frequency, wavelength
 
 %Car model parameters
-range_translation = 10; % Expected amount of translation in the range axis (m)
+range_translation = 20; % Expected amount of translation in the range axis (m)
+car_size = 5; % size of the car ( change this to make the car a truck :) ) 
 
 % Antenna specific variables
 TX_pos = [0,0,0]; % Tx antenna position (x,y,z)
@@ -97,6 +98,7 @@ array_size = [1,1];
 
 % Detection variables
 N_target = 4;
+window = false;
 
 %Plot variables
 PlotResultsFlag = true; % plot the pretty pictures
@@ -151,8 +153,12 @@ max_omega =  pi - omega_guard_bins*2*pi/N_tx;
 
 %%% draw target delay, doppler, angles (equivalent spatial frequencies)
 %%% from car model
-[sph_v, sph_n, com , normals] = radar_car_model(range_translation);
-sph_vector = sph_n; % Choose normal/ strong reflectors
+%[sph_v, sph_n, com , normals] = radar_car_model(range_translation);
+%sph_vector = sph_n; % Choose normal/ strong reflectors
+
+sph_v = car_toy_model(range_translation, car_size);
+sph_vector = sph_v;
+
 % sph_vector = datasample(sph_vector, 10); % Randomly choose 10 reflectors
 N_points = numel(sph_vector(:,1));
 
@@ -215,7 +221,9 @@ y_rx = y_rx + sqrt(noise_power/2)*(randn(size(y_rx)) + 1i*randn(size(y_rx)));
 %% estimate targets from simulated measurements
 oversampling_symb = 8; % range FFT oversampling rate
 oversampling_chirp = 2^ceil(log(N_beacons)/log(2)+1); % doppler FFT oversampling rate
+
 %%% Window the signal 
+if (window)
 for beacon_i = 1:N_beacons
     for chirp_i = 1:N_chirp
         y_rx(beacon_i,chirp_i,:)  = reshape(y_rx(beacon_i,chirp_i,:),N_symb,1).* hann(length(y_rx)) ;
@@ -228,6 +236,7 @@ for beacon_i = 1:N_beacons
     for syms_i = 1:N_symb
         y_rx(beacon_i,:,syms_i)= reshape(y_rx(beacon_i,:,syms_i),N_chirp,1).*hann(size(y_rx,2));
     end
+end
 end
 %%% evaluate range-doppler domain signal ( 2D FFT)
 y_rd = zeros(N_beacons, N_chirp*oversampling_chirp, N_symb*oversampling_symb);
@@ -342,7 +351,7 @@ for i_bin = 1:length(target_bins(:,1))
     omega_est(i_bin) = angle(exp(1i*om_list(1)));
 end
 %%%%
-% Estimate angle from NOMP
+% Estimate angle from NOMP-RD
 % WIP
 % mean_speed_estimate = 0;
 % for i_beacon = 1: N_beacons
@@ -384,7 +393,7 @@ true_targets = [ffreq_vect(:)*ffreq_to_range, doppler_vect(:)*N_chirp/2/pi, omeg
 plot_omega(true_targets, detected_targets);
 
 % Plot the car image
-plot_targets_2D(sph_vector, omega_vect, N_tx,...
+plot_targets_2D(true_targets, omega_vect, N_tx,...
     doppler_vect, N_chirp, detected_range, detected_targets)
 
 error_mat = zeros(N_target,3);
