@@ -1,7 +1,7 @@
 %% Two Dinensioal NOMP functions
 
 function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,...
-			      	   tau, overSamplingRate, numRefine)
+			      	   tau, numRefine, window, Nbins)
 % SUMMARY:
 % 
 %   given measurements: y = S * (mixture of sinusoids) + white noise
@@ -24,8 +24,6 @@ function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,
 %   gainList     - gains of estimated frequencies
 %   residueList  - trajectory of the energy in the residual
 
-if ~exist('overSamplingRate','var'), overSamplingRate = 4;
-elseif isempty(overSamplingRate), overSamplingRate = 4; end
 
 if ~exist('numRefine','var'), numRefine = 6;
 elseif isempty(numRefine),    numRefine = 6; end
@@ -47,14 +45,14 @@ gainList  = [];
 y_r = y;
 residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
-timer = 5;
-while timer>0
+
+while Nbins>0
     % keep detecting new sinusoids until power in residue 
     % becomes small; *** how small *** determined by *** tau ***
     
     % detect gain and frequency of an additional sinusoid
     [omega_new_range, omega_new_doppler, h_l, y_r, res_inf_normSq_rot] =...
-        detectNewRD(y_r, sampledManifold);
+        detectNewRD(y_r, sampledManifold,window);
     % detecttNew removes the contribution of the newly detected
     % from the old residue  y_r(input) and reports the new residual measurement y_r (output)
     res_infoList = [res_infoList ; res_inf_normSq_rot];
@@ -94,14 +92,14 @@ while timer>0
 
     residue_new = y_r(:)'*y_r(:);
     residueList = [residueList; residue_new];
-    timer = timer-1;
+    Nbins = Nbins-1;
 end
 
 end
 
 
 function [omega_range, omega_doppler, h_l, r_l, res_inf_normSq_rot] = detectNewRD(y,...
-					 sampledManifold)
+					 sampledManifold,window)
 % SUMMARY:
 % 	detects a new sinusoid on the coarse grid
 % 	refines the newly detected frequency *numRefine* times
@@ -141,6 +139,16 @@ function [omega_range, omega_doppler, h_l, r_l, res_inf_normSq_rot] = detectNewR
        exp(1j*sampledManifold.ant_idx_range * omega_range)'/...
        sqrt(sampledManifold.length(1))/sqrt(sampledManifold.length(2)); %(N-chirp x N_symbol) TODO:Verify
     
+   if (window)
+       for chirp_i = 1:size(x,1)
+            x(chirp_i,:)  = x(chirp_i,:).* hann(length(x))' ;   
+        end
+        %%% Window the signal in doppler domain
+        for syms_i = 1:size(x,2)
+            x(:,syms_i)=x(:,syms_i).*hann(size(x,1));
+        end
+   end
+
    h_l = x(:)' * y(:) / norm(x)^2; 
    % residual measurements after subtracting
    % out the newly detected sinusoid

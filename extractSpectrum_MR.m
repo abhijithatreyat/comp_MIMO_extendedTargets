@@ -1,4 +1,4 @@
-%% NOMP Functoins %%
+%% NOMP Functoins for angle estimation%%
 
 function [omegaList, gainList, residueList] = extractSpectrum_MR(y, S,...
 			      	   tau, overSamplingRate, numRefine)

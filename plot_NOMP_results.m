@@ -17,7 +17,7 @@ if PlotResultsFlag
 
         for val = 1:size(RangeList,1)
             plot(RangeList(val,fig_i)',DopplerList(val,fig_i)','bo','LineWidth',.75,'MarkerSize', ...
-                2+floor(5*abs(gainListRD(val,fig_i)')) );
+                1+floor(abs(gainListRD(val,fig_i)')) );
             hold on;
         end
         hold off;

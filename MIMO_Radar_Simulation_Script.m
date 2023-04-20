@@ -86,7 +86,7 @@ chirp_slope = BW/Tc; % slope of chirp frequency ramp in Hz/s
 fc = 60e9; lambda = c/fc; % carrier frequency, wavelength
 
 %Car model parameters
-range_translation = 20; % Expected amount of translation in the range axis (m)
+range_translation = 10; % Expected amount of translation in the range axis (m)
 car_size = 5; % size of the car ( change this to make the car a truck :) ) 
 
 % Antenna specific variables
@@ -97,8 +97,8 @@ array_idx = (1:N_tx)-ceil(N_tx/2);
 array_size = [1,1];
 
 % Detection variables
-N_target = 4;
-window = false;
+N_target = 2;
+window = true;
 
 %Plot variables
 PlotResultsFlag = true; % plot the pretty pictures
@@ -183,7 +183,7 @@ clear min_speed max_speed;
 doppler_vect = (com_velocity*[cart_x';cart_y']);
 
 % Range to freq
-ffreq_vect = chirp_slope /c *(2* true_range); % Check
+ffreq_vect = chirp_slope /c *(2* true_range); 
 % ffreq_vect = min_ffreq + (max_ffreq-min_ffreq)*ffreq_vect;
 
 % amplitude vecotor for one chirp
@@ -268,7 +268,7 @@ if PlotResultsFlag
     hold on;
     xlim([Rmin-1,Rmax+1]); ylim([-1,1]*pi*doppler_to_speed) % Xlim 
     xlabel('range (m)'); ylabel('radial speed (m/s)');
-    title('true (x) and estimated (o) targets')
+    title('true (x) and estimated ( SR:o / NOMP:+ ) targets')
     figure();
     h = surf(range_axis,speed_axis,20*log10(power_bins));
     set(h,'edgecolor','none'); view(2);
@@ -290,6 +290,9 @@ end
 %%% signal. This part is a crude version of NOMP crude and will be cleaned
 %%% up in next version.
 
+extra_bins = floor(log(N_target));
+target_bins = zeros(N_target+extra_bins,2);
+
 %%% NOMP for range and doppler estimation
 %%% Input is y_rd , A_CS = S = ((1024x2048)1D x (1024x2048)1D)
 %%% Output must be target_bins(:,1) = Doppler bins and  target_bins(:,2) = Range bins
@@ -298,9 +301,11 @@ DopplerList = []; % Each column represents 1 beacon ... row-wise across beacons
 gainListRD = []; % Each column represents 1 beacon ... row-wise across beacons
 residueListRD = []; % Each column represents 1 beacon ... row-wise across beacons
 
+
+% Subframe level NOMP
 for beacon_i = 1:N_beacons
     y_RD = squeeze(y_rx(beacon_i,:,:));  % (N_chirps x N_symbols)
-    [omegaRange, omegaDoppler, gainRD, residueRD] = extractRD(y_RD, 1e-1);
+    [omegaRange, omegaDoppler, gainRD, residueRD] = extractRD(y_RD, 1e-1,4,window, N_target+extra_bins);
     RangeList = [RangeList,omegaRange];
     DopplerList = [DopplerList,omegaDoppler ];
     gainListRD = [gainListRD, gainRD];
@@ -311,12 +316,16 @@ end
 RangeList = RangeList .* ffreq_to_range ./ts;
 DopplerList = DopplerList .* doppler_to_speed;
 
-plot_NOMP_results(PlotResultsFlag, ffreq_vect, doppler_vect, ffreq_to_range, doppler_to_speed, ...
-    RangeList, DopplerList, gainListRD, Rmin, Rmax);
+% Take the mean of 80% data variance
+RangeListNOMP = trimmean(RangeList, 10, 2);
+DopplerListNOMP = trimmean(DopplerList, 10, 2);
+gainNOMP = trimmean(abs(gainListRD).^2,10,2);
+
+% plot_NOMP_results(PlotResultsFlag, ffreq_vect, doppler_vect, ffreq_to_range, doppler_to_speed, ...
+%     RangeList, DopplerList, gainListRD, Rmin, Rmax);
 
 %%%%
-extra_bins = floor(log(N_target));
-target_bins = zeros(N_target+extra_bins,2);
+
 power_residue = power_bins; % updated after each peak is identified and subtracted
 y_residue = y_rx; % updated after each peak is identified and subtracted
 y_rd_residue = y_rd; % updated after each peak is identified and subtracted
@@ -331,8 +340,21 @@ end
     N_chirp, oversampling_chirp, y_residue, y_rd_residue,...
     N_beacons, ffreq_to_range, ts, PlotResultsFlag, fig_0, fig_2,  ...
     num_subplot_rows, num_subplot_cols, Rmin, Rmax, doppler_to_speed,...
-    range_axis, speed_axis, min_val, peak_power);
+    range_axis, speed_axis, min_val, peak_power,window);
 
+    %Plot the RD results
+    figure(fig_0); hold on;
+    for i_target = 1:N_target+extra_bins 
+        ind_row = target_bins(i_target,1);
+        ind_col = target_bins(i_target,2);
+        w_doppler = angle(exp(-1i*2*pi*(ind_row-1)/N_chirp/oversampling_chirp)); 
+        plot((ind_col-1)*2*pi/N_symb/oversampling_symb*ffreq_to_range/ts,w_doppler ...
+            *doppler_to_speed,'bo','LineWidth',2,'MarkerSize', ...
+            5+5*power_bins(ind_row,ind_col)/peak_power)
+
+        plot(RangeListNOMP(i_target),DopplerListNOMP(i_target),"m+","LineWidth",2,...
+            "MarkerSize",5+5*gainNOMP(i_target)/max(gainNOMP));
+    end
 
 %%% now find the direction of each target (or targets inside each
 %%% identified bin, for now just assuming one target in each bin)
