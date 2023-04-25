@@ -1,5 +1,5 @@
 function plot_targets_2D(true_targets, omega_vect, N_tx,...
-    doppler_vect, N_chirp, detected_range, detected_targets)
+    doppler_vect, N_chirp, detected_range, detected_targets, stringVal)
 % Plots true and estimated targets in 2D space
 % Input arguments:
 % true_targets -  true range, doppler and azimuth
@@ -35,5 +35,5 @@ function plot_targets_2D(true_targets, omega_vect, N_tx,...
     txt2 =['Estimated speed:' num2str(det_speed) 'm/s'];
     text(1,1,txt);
     text(1,1.5,txt2);
-    title('Estimated and true targets in 2D space');
+    title('Estimated and true targets in 2D space for' + stringVal);
 end

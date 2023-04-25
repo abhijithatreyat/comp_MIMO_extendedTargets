@@ -1,4 +1,4 @@
-function plot_omega(true_targets, detected_targets)
+function plot_omega(true_targets, detected_targets, stringVal)
 % Plot omega
 fig_w = figure();
 % Polar plot 
@@ -17,5 +17,5 @@ ylim([min(min(det_y),min(true_y))-2, max(max(det_y),max(true_y))+2]);
 zlim([min(min(det_z),min(true_z))-2, max(max(det_z),max(true_z))+2]);
 
 legend('True', 'Estimated');
-title('True and Estimated ');
+title('True and Estimated for '+ stringVal);
 end

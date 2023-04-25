@@ -7,7 +7,7 @@ function [target_bins, detected_range] = extract_targets(N_target,power_bins, ex
 % EXTRACT_TARGETS identifies targets from a range-doppler signal power residue
 detected_range = [];
 
-for i_target = 1:N_target+extra_bins
+for i_target = 1:N_target
     [max_v,ind_row_vect] = max(power_residue);
     [~,ind_col] = max(max_v);
     ind_row = ind_row_vect(ind_col);
@@ -50,7 +50,7 @@ for i_target = 1:N_target+extra_bins
         if i_target <= num_subplot_rows*num_subplot_cols
             figure(fig_2); subplot(num_subplot_rows,num_subplot_cols,i_target);
             h = surf(range_axis,speed_axis,10*log10(power_residue+min_val));
-            set(h,'edgecolor','none'); view(2);
+            set(h,'edgecolor','none');
             % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);
             xlim([Rmin,Rmax]); ylim([-1,1]*pi*doppler_to_speed)
             ylabel(['after ',num2str(i_target),' extraction(s)']);

@@ -11,11 +11,11 @@ function sph_v = car_toy_model(range_translation , car_size)
     %  0,0 ---------------- car_size,0
 % Scale and rotate the car
     % 2 point model
-    N_target = 2;
-    input = [0, 0 ,0 ; 0, car_size, 0];
+%     N_target = 2;
+%     input = [0, 0 ,0 ; 0, car_size, 0];
 
-%     N_target = 4;
-%     input = [0, 0 ,0 ; 0, car_size, 0 ; car_size, 0, 0 ; car_size, car_size,0];
+    N_target = 4;
+    input = [0, 0 ,0 ; 0, car_size, 0 ; car_size, 0, 0 ; car_size, car_size,0];
    
     theta = -180+360*rand([1,3]);
     % Assuming car is 5 times the car length's distance away from radar
