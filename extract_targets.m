@@ -6,7 +6,8 @@ function [target_bins, detected_range] = extract_targets(N_target,power_bins, ex
 
 % EXTRACT_TARGETS identifies targets from a range-doppler signal power residue
 detected_range = [];
-
+window = false; % Oversampled FFT does not require windowing
+plot_id = 0;
 for i_target = 1:N_target
     [max_v,ind_row_vect] = max(power_residue);
     [~,ind_col] = max(max_v);
@@ -46,9 +47,11 @@ for i_target = 1:N_target
         N_chirp*oversampling_chirp,N_symb*oversampling_symb); % update aggregate power
     % residue
     detected_range = [ detected_range ,(ind_col-1)*2*pi/N_symb/oversampling_symb*ffreq_to_range/ts];
+
     if PlotResultsFlag
-        if i_target <= num_subplot_rows*num_subplot_cols
-            figure(fig_2); subplot(num_subplot_rows,num_subplot_cols,i_target);
+        if mod(i_target, floor( N_target /num_subplot_rows/num_subplot_cols)) == 0
+            plot_id = plot_id + 1;
+            figure(fig_2); subplot(num_subplot_rows,num_subplot_cols,plot_id);
             h = surf(range_axis,speed_axis,10*log10(power_residue+min_val));
             set(h,'edgecolor','none');
             % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);

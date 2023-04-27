@@ -1,7 +1,8 @@
 %% Two Dinensioal NOMP functions
 
 function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,y_RD,...
-			      	   tau, numRefine, window, Nbins, Rmin, Rmax, doppler_to_speed,  range_axis, speed_axis)
+			      	   tau, numRefine, window, Nbins, Rmin, Rmax, doppler_to_speed, ...
+                       range_axis, speed_axis, overSamplingRate_R, overSamplingRate_D)
 % SUMMARY:
 % 
 %   given measurements: y = S * (mixture of sinusoids) + white noise
@@ -32,8 +33,7 @@ M = size(y,3); % N_symbols
 L = size(y,2); % N_chirps
 N_beacons = size(y,1);
 
-overSamplingRate_R = 8;
-overSamplingRate_D = 32;
+
 % Algorithm preprocessing
     sampledManifold = preProcessMeasMat(M,L, overSamplingRate_R, overSamplingRate_D ); 
 
@@ -52,8 +52,9 @@ power_residue = reshape(sum(abs(y_rd_residue).^2,1),L*overSamplingRate_D, M*over
 residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
 fig_2 = figure();
+timer = 100;
 
-while Nbins>0
+while timer>0
     % keep detecting new sinusoids until power in residue 
     % becomes small; *** how small *** determined by *** tau ***
 
@@ -107,7 +108,7 @@ while Nbins>0
 
     residue_new = y_r(:)'*y_r(:);
     residueList = [residueList; residue_new];
-    Nbins = Nbins-1;
+    timer = timer-1;
 end
 
 end
