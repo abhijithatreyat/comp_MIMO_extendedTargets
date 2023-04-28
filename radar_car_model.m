@@ -8,7 +8,12 @@ end
 function [sph_n,com, normals] = car_model(model,range_translation , angle_threshold )
   
     path_to_pointCloud = 'CAD/CAD_model_%d.mat';
-    CAD_idx = 5; % CAD_ID of the model car (1 -38)
+    CAD_idx = 2; % CAD_ID of the model car (1 -38)
+    % 2 does not work
+    % 5 works
+    % 6 does not work
+    % 7 does not work
+    % 8 does not work
     disp_pc = 0; % Display images
     k = 6; % nearest neighbours to consider for change in normal
     car_v = loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc);

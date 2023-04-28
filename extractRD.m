@@ -29,6 +29,10 @@ function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,
 if ~exist('numRefine','var'), numRefine = 6;
 elseif isempty(numRefine),    numRefine = 6; end
 
+if (~exist('opt', 'var'))
+        opt = true;
+end
+
 M = size(y,3); % N_symbols
 L = size(y,2); % N_chirps
 N_beacons = size(y,1);
@@ -52,7 +56,9 @@ power_residue = reshape(sum(abs(y_rd_residue).^2,1),L*overSamplingRate_D, M*over
 residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
 fig_2 = figure();
+title("Extracted Power in NOMP");
 timer = 100;
+subplot_i = 1;
 
 while timer>0
     % keep detecting new sinusoids until power in residue 
@@ -67,15 +73,10 @@ while timer>0
     % detecttNew removes the contribution of the newly detected
     % from the old residue  y_r(input) and reports the new residual measurement y_r (output)
     res_infoList = [res_infoList ; res_inf_normSq_rot];
-    % stopping criterion:
-    if res_inf_normSq_rot < tau
-        break;
-    end
-
     
     % residue
-   plotResidue(power_residue, Nbins,  range_axis, speed_axis,...
-                fig_2, Rmin, Rmax, doppler_to_speed);
+   subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
+                fig_2, Rmin, Rmax, doppler_to_speed, subplot_i);
 
     % newly detected sinusoid is coarse - so we refine it to 
     % imitate detection on the continuum
@@ -109,6 +110,11 @@ while timer>0
     residue_new = y_r(:)'*y_r(:);
     residueList = [residueList; residue_new];
     timer = timer-1;
+
+    % stopping criterion:
+    if res_inf_normSq_rot < tau
+        break;
+    end
 end
 
 end
@@ -425,16 +431,17 @@ function sampledManifold = preProcessMeasMat(M,L, overSamplingRate_R, overSampli
 
 end
 
-function plotResidue(power_residue, numbins,range_axis,speed_axis ,fig_2,...
-    Rmin, Rmax, doppler_to_speed)
+function subplot_i = plotResidue(power_residue, iteration , range_axis,speed_axis ,fig_2,...
+    Rmin, Rmax, doppler_to_speed, subplot_i)
     
-    if (numbins <= 4)
-        figure(fig_2);
-        subplot(2,2,5-numbins);
+    if mod(iteration, 4) == 0
+        figure(fig_2); hold on;
+        subplot(2,2,subplot_i);
         h = surf(range_axis,speed_axis,10*log10(power_residue));
         set(h,'edgecolor','none');view(3);
         % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);
         xlim([Rmin,Rmax]); ylim([-1,1]*pi*doppler_to_speed)
-        ylabel(['after ',num2str(5-numbins),' extraction(s)']);
+        ylabel(['after ',num2str(iteration),' extraction(s)']);
+        subplot_i = subplot_i +1;
     end
 end
