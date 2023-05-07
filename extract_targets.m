@@ -1,12 +1,12 @@
 function [target_bins, detected_range] = extract_targets(N_target,power_bins, extra_bins,...
     power_residue, N_symb, oversampling_symb, N_chirp, oversampling_chirp, ...
     y_residue, y_rd_residue, N_beacons, ffreq_to_range, ts, PlotResultsFlag,...
-    fig_0, fig_2, num_subplot_rows, num_subplot_cols, Rmin, Rmax, doppler_to_speed,...
+    fig_2, num_subplot_rows, num_subplot_cols, Rmin, Rmax, doppler_to_speed,...
     range_axis, speed_axis, min_val, peak_power, window)
 
 % EXTRACT_TARGETS identifies targets from a range-doppler signal power residue
 detected_range = [];
-window = false; % Oversampled FFT does not require windowing
+window = true; % Oversampled FFT does not require windowing
 plot_id = 0;
 for i_target = 1:N_target
     [max_v,ind_row_vect] = max(power_residue);
@@ -58,11 +58,6 @@ for i_target = 1:N_target
             xlim([Rmin,Rmax]); ylim([-1,1]*pi*doppler_to_speed)
             ylabel(['after ',num2str(i_target),' extraction(s)']);
         end
-%         figure(fig_0); hold on;
-%       
-%         plot((ind_col-1)*2*pi/N_symb/oversampling_symb*ffreq_to_range/ts,w_doppler ...
-%             *doppler_to_speed,'bo','LineWidth',1,'MarkerSize', ...
-%             5+5*power_bins(ind_row,ind_col)/peak_power)
 
     end
 end

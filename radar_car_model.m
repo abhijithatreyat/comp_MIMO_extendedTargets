@@ -8,13 +8,13 @@ end
 function [sph_n,com, normals] = car_model(model,range_translation , angle_threshold )
   
     path_to_pointCloud = 'CAD/CAD_model_%d.mat';
-    CAD_idx = 2; % CAD_ID of the model car (1 -38)
+    CAD_idx = 1; % CAD_ID of the model car (1 -38)
     % 2 does not work
     % 5 works
     % 6 does not work
     % 7 does not work
     % 8 does not work
-    disp_pc = 0; % Display images
+    disp_pc = 1; % Display images
     k = 6; % nearest neighbours to consider for change in normal
     car_v = loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc);
 
@@ -79,7 +79,7 @@ function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
     variable_library;
     %% Rotate     
     car_scene_v.rotate = rotate_ang(randi(length(rotate_ang))); % randomly select a rotation angle and store it in the pc structure
-    car_scene_v.rotate = mod(car_scene_v.rotate*(randi(1)*2-1),180);
+    car_scene_v.rotate = mod(car_scene_v.rotate,180);
     % inline function for 2D rotation
     rotate2d =  @(x, M) (x(:, 1:2) * M);
     rotate_angle_rad = car_scene_v.rotate/180*pi;

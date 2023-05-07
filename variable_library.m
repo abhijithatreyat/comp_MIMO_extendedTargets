@@ -1,6 +1,6 @@
 
 % angle of rotation for every model
-rotate_ang_coarse = [0:15:90];
+rotate_ang_coarse = [10:15:170];
 rotate_ang_fine = [-5:5];
 rotate_ang = [];
 for k_rotate_ang_fine = rotate_ang_fine

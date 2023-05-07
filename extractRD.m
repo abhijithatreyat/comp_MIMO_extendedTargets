@@ -1,8 +1,8 @@
 %% Two Dinensioal NOMP functions
 
-function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,y_RD,...
+function [omegaRangeList,omegaDopplerList, gainList, res_infoList] = extractRD(y,y_RD,...
 			      	   tau, numRefine, window, Nbins, Rmin, Rmax, doppler_to_speed, ...
-                       range_axis, speed_axis, overSamplingRate_R, overSamplingRate_D)
+                       range_axis, speed_axis, overSamplingRate_R, overSamplingRate_D, minVal)
 % SUMMARY:
 % 
 %   given measurements: y = S * (mixture of sinusoids) + white noise
@@ -26,8 +26,8 @@ function [omegaRangeList,omegaDopplerList, gainList, residueList] = extractRD(y,
 %   residueList  - trajectory of the energy in the residual
 
 
-if ~exist('numRefine','var'), numRefine = 6;
-elseif isempty(numRefine),    numRefine = 6; end
+if ~exist('numRefine','var'), numRefine = 15;
+elseif isempty(numRefine),    numRefine = 15; end
 
 if (~exist('opt', 'var'))
         opt = true;
@@ -57,14 +57,16 @@ residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
 fig_2 = figure();
 title("Extracted Power in NOMP");
-timer = 100;
+timer = 0;
 subplot_i = 1;
+res_inf_normSq_rot = 1e10;
+iterate = 0;
 
-while timer>0
+
+while timer<100
     % keep detecting new sinusoids until power in residue 
     % becomes small; *** how small *** determined by *** tau ***
 
-    
 
     % detect gain and frequency of an additional sinusoid
     [omega_new_range, omega_new_doppler, y_r, y_rd_residue, power_residue,...
@@ -76,7 +78,7 @@ while timer>0
     
     % residue
    subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
-                fig_2, Rmin, Rmax, doppler_to_speed, subplot_i);
+                fig_2, Rmin, Rmax, doppler_to_speed, subplot_i, minVal);
 
     % newly detected sinusoid is coarse - so we refine it to 
     % imitate detection on the continuum
@@ -109,12 +111,13 @@ while timer>0
 
     residue_new = y_r(:)'*y_r(:);
     residueList = [residueList; residue_new];
-    timer = timer-1;
+    timer = timer+1;
 
     % stopping criterion:
     if res_inf_normSq_rot < tau
         break;
     end
+    
 end
 
 end
@@ -157,7 +160,10 @@ function [omega_range, omega_doppler, y_r, y_rd_residue, power_residue, h_l, res
    % Detect the range and doppler values
    omega_range = sampledManifold.coarseOmega_range(ind_col);
    omega_doppler = angle(exp(-1j*sampledManifold.coarseOmega_doppler(ind_row)));
- 
+   
+   omega_range = 2*pi*(ind_col-1)/R1; % equivalent range frequency 
+    % of largest peak
+    omega_doppler = angle(exp(-1i*2*pi*(ind_row-1)/R2)); % equivalent
 
    % compute the response corresponding to the
    % current estimate of the sinusoid
@@ -226,7 +232,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
     N_beacons = size(y_r,1);
 
     x_theta = reshape(exp(-1i*omega_d*(0:L-1)')* ...
-        exp(1i*omega_r*(0:M-1)),1,L,M);%  TODO:Verify
+        exp(1i*omega_r*(0:M-1)),1,L,M);
     
    if (window)
         for chirp_i = 1:L
@@ -312,20 +318,27 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
         
         % UPDATE RESIDUE
         y_r_next(i_beacon,:,:) = y(i_beacon) - gain_next*x_theta;
-        
+%         if (y_r_next(i_beacon,:)*y_r_next(i_beacon,:)') <= (y_r(i_beacon,:)*y_r(i_beacon,:)')
+%             % commit only if the residue decreases
+%             omega_r = omega_r_next;
+%             omega_d = omega_d_next;
+%             h_l = gain_next;
+%             y_r(i_beacon) = y_r_next(i_beacon);
+%         end
+    end
         % check for decrease in residue -  needed as a result of 
         % non-convexity of residue (even when the cost surface 
         % is locally convex); This is the same as checking whether 
         % |<y, x_theta>|^2/<x_theta,x_theta> improves as we ensured 
         % that y - gain*x_theta is perp to x_theta by recomputing gain
-        if (y_r_next(i_beacon,:)*y_r_next(i_beacon,:)') <= (y_r(i_beacon,:)*y_r(i_beacon,:)')
+        if (y_r_next(:)'*y_r_next(:)) <= (y_r(:)'*y_r(:))
             % commit only if the residue decreases
             omega_r = omega_r_next;
             omega_d = omega_d_next;
             h_l = gain_next;
             y_r(i_beacon) = y_r_next(i_beacon);
         end
-    end
+    
 end
 
 % --------------------------------------------------------------------
@@ -432,13 +445,13 @@ function sampledManifold = preProcessMeasMat(M,L, overSamplingRate_R, overSampli
 end
 
 function subplot_i = plotResidue(power_residue, iteration , range_axis,speed_axis ,fig_2,...
-    Rmin, Rmax, doppler_to_speed, subplot_i)
+    Rmin, Rmax, doppler_to_speed, subplot_i, minVal)
     
-    if mod(iteration, 4) == 0
+    if (mod(iteration,3) == 0 )&& (subplot_i < 4)
         figure(fig_2); hold on;
         subplot(2,2,subplot_i);
-        h = surf(range_axis,speed_axis,10*log10(power_residue));
-        set(h,'edgecolor','none');view(3);
+        h = surf(range_axis,speed_axis,20*log10(power_residue + minVal));
+        set(h,'edgecolor','none');view(2);
         % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);
         xlim([Rmin,Rmax]); ylim([-1,1]*pi*doppler_to_speed)
         ylabel(['after ',num2str(iteration),' extraction(s)']);
