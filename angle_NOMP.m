@@ -5,6 +5,9 @@ function omega_estNOMP = angle_NOMP( RangeListNOMP, range_axis, DopplerListNOMP,
 
 NOMP_targts = size(RangeListNOMP,1);
 omega_estNOMP = zeros(NOMP_targts,1);
+% Estimate the doppler drift on average
+%dop_i = mean((DopplerListNOMP)*2*pi/N_chirp/oversampling_chirp);
+
     for i_bin = 1 : NOMP_targts
         % Find the closest NOMP est. range and doppler bins in the grid
         target_binsNOMP(i_bin,2) = ...
@@ -16,12 +19,12 @@ omega_estNOMP = zeros(NOMP_targts,1);
         % TODO replace this with FFT2(y_rx(i_beacon,:,:) @ (Range_Est,
         % Doppler_est)
         % WIP
-        x_estimate = exp(-1i*2*pi*DopplerListNOMP(i_bin)*speed_to_doppler*(0:N_chirp-1)')* ...
-        exp(-1i*2*pi*RangeListNOMP(i_bin)/76.8*(0:N_symb-1)) ;
-        y_est = zeros(N_beacons,1);
-        for i_beacon = 1 : N_beacons
-            y_est(i_beacon) = y_rx(i_beacon,:) * x_estimate(:);
-        end
+%         x_estimate = exp(-1i*2*pi*DopplerListNOMP(i_bin)*speed_to_doppler*(0:N_chirp-1)')* ...
+%         exp(-1i*2*pi*RangeListNOMP(i_bin)/76.8*(0:N_symb-1)) ;
+%         y_est = zeros(N_beacons,1);
+%         for i_beacon = 1 : N_beacons
+%             y_est(i_beacon) = y_rx(i_beacon,:) * x_estimate(:);
+%         end
         % Commented as this is not working for now!
         %y_b = y_est;
         %y_b = y_b.*exp(-1i*2*DopplerListNOMP(i_bin)*(0:N_beacons-1)');

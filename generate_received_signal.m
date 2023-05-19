@@ -11,7 +11,7 @@ for target = 1:N_points
     f_delay = ts*ffreq_vect(target);
 
     % Calculate the nominal chirp response for this target
-    y_nom_chirp = amp_vect(target)*exp(1i*f_delay*(0:N_symb-1));
+    y_nom_chirp = amp_vect(:,target)'.*exp(1i*f_delay*(0:N_symb-1));
 
     % Calculate the phase change over chirps due to Doppler (in one subframe)
     dop_phase = exp(-1i*doppler_vect(target)*(0:N_chirp-1)');

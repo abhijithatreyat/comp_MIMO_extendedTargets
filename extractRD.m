@@ -63,7 +63,7 @@ res_inf_normSq_rot = 1e10;
 iterate = 0;
 
 
-while timer<100
+while timer<20
     % keep detecting new sinusoids until power in residue 
     % becomes small; *** how small *** determined by *** tau ***
 
@@ -269,7 +269,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
         %gain = (x_theta'*y);
         y_r = y - h_l.*x_theta;
     end
-    
+   
     for i_beacon = 1:N_beacons
         der1_r = -2*real(h_l .* y_r(i_beacon,:)*dx_theta_domega_r(:)); 
         der1_d = -2*real(h_l .* y_r(i_beacon,:)*dx_theta_domega_d(:)); 
@@ -279,8 +279,9 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
     
         der2_d = -2*real(h_l * y_r(i_beacon,:)*d2x_theta_d2omega_d(:)) +...
         2*(abs(h_l)^2)*(dx_theta_domega_d(:)'*dx_theta_domega_d(:));
-    end
+        
     
+   
     % UPDATE Range and doppler estiamtes 
    
     if der2_r > 0
@@ -312,7 +313,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
         end
     end
     
-    for i_beacon = 1:N_beacons
+    %for i_beacon = 1:N_beacons
         % UPDATE GAIN
         gain_next = (x_theta(:)'*y(i_beacon,:)');
         
@@ -325,7 +326,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
 %             h_l = gain_next;
 %             y_r(i_beacon) = y_r_next(i_beacon);
 %         end
-    end
+   %end
         % check for decrease in residue -  needed as a result of 
         % non-convexity of residue (even when the cost surface 
         % is locally convex); This is the same as checking whether 
@@ -338,7 +339,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
             h_l = gain_next;
             y_r(i_beacon) = y_r_next(i_beacon);
         end
-    
+    end
 end
 
 % --------------------------------------------------------------------

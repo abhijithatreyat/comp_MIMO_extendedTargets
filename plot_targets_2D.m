@@ -28,12 +28,12 @@ function plot_targets_2D(true_targets, omega_vect, N_tx,...
     hold on;
     plot(0,0,'ko');
     xlabel('x (m)'); ylabel('y (m)');
-    xlim([-1, (max(true_x)+5)]);
-    ylim([-2, (max(true_y)+5)]);
+    xlim([(min(true_x)-5), (max(true_x)+5)]);
+    ylim([0, (max(true_y)+5)]);
     legend('True', 'Estimated','Radar location');
     txt = ['True speed: ' num2str(true_speed) 'm/s'];
     txt2 =['Estimated speed: ' num2str(det_speed) 'm/s'];
     text(1,1,txt);
-    text(1,2,txt2);
+    text(1,3,txt2);
     title('Estimated and true targets in 2D space for' + stringVal);
 end

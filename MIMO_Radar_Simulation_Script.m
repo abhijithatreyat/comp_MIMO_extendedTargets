@@ -1,7 +1,7 @@
 close all;
 clear;
 clc;
-rng(1);
+rng(2);
 single_run = true;
 monte_carlo_run = false;
 
@@ -87,21 +87,24 @@ fc = 60e9; lambda = c/fc; % carrier frequency, wavelength
 
 %Car model parameters
 % Choose between different models 
-model = "Hawkeye" ; % Options : edge , normal , Hawkeye  (Default : Hawkeye)
-range_translation = 5; % Expected amount of translation in the range axis (m)
+model = "Hawkeye" ; % Options : edge , normal , Hawkeye, Toy  (Default : Hawkeye)
+range_translation = 10; % Expected amount of translation in the range axis (m)
+                        % Keep below 70m
 car_size = 5; % size of the car ( change this to make the car a truck :) ) 
 angle_threshold = 160; % Parameter for normal model only
 
 % Antenna specific variables
 TX_pos = [0,0,0]; % Tx antenna position (x,y,z) 
-RX_pos = [1,0,0]; % Rx antenna position (x,y,z)
+RX_pos = [10,0,0]; % Rx antenna position (x,y,z)
 array_spacing = lambda/2; % antenna element spacing
 array_idx = (1:N_tx)-ceil(N_tx/2);
 array_size = [1,1];
+radar_FoV = [0,pi];
+array_x_m = array_idx*array_spacing;
 
 % Detection variables
 N_target = 4;
-window = true;
+window = false;
 oversampling_symb = 4; % range FFT oversampling rate
 oversampling_chirp = 32;%2^ceil(log(N_beacons)/log(2)+1); % doppler FFT oversampling rate
 
@@ -133,11 +136,14 @@ max_omega =  pi - omega_guard_bins*2*pi/N_tx;
 
 %%% draw target delay, doppler, angles (equivalent spatial frequencies)
 %%% from car model
-[ sph_n, com , normals] = radar_car_model(model, range_translation, angle_threshold);
-sph_vector = sph_n;
-% 
-% sph_v = car_toy_model(range_translation, car_size);
-% sph_vector = sph_v;
+
+if  model == "Toy"
+    sph_v = car_toy_model(range_translation, car_size);
+    sph_vector = sph_v;
+else
+    [ sph_n, com , normals] = radar_car_model(model, range_translation, angle_threshold);
+    sph_vector = sph_n;
+end
 
 % sph_vector = datasample(sph_vector, 10); % Randomly choose 10 reflectors
 N_points = numel(sph_vector(:,1));
@@ -166,9 +172,9 @@ doppler_vect = (com_velocity*[cart_x';cart_y']);
 ffreq_vect = chirp_slope /c *(2* true_range); 
 % ffreq_vect = min_ffreq + (max_ffreq-min_ffreq)*ffreq_vect;
 
-% amplitude vecotor for one chirp
-amp_vect = zeros(1,N_points);
-amp_vect = calculate_amp_vect(TX_pos, RX_pos, cart_x, cart_y, cart_z, c, fc, N_points, t_ax, chirp_slope);
+% amplitude vector for one chirp
+amp_vect = calculate_amp_vect(TX_pos, RX_pos, cart_x, cart_y, cart_z,...
+    c, fc, N_points, t_ax, array_x_m);
 
 %%% normalize and ensure dynamic range does not exceed limit (DR)
 amp_vect = amp_vect./sqrt(mean(amp_vect.^2));
@@ -277,7 +283,11 @@ gainListRD = []; % Each column represents 1 beacon ... row-wise across beacons
 residueListRD = []; % Each column represents 1 beacon ... row-wise across beacons
 
 % Subframe level NOMP for all targets
-tau = sqrt(noise_power)*N_symb*N_chirp; 
+if model == "Toy"
+    tau = sqrt(noise_power)*N_symb*N_chirp/7; 
+else
+    tau = sqrt(noise_power)*N_symb*N_chirp; 
+end
 [omegaRange, omegaDoppler, gainRD, residueRD] = extractRD(y_rx,y_rd, tau ,4,window, ...
     N_target, Rmin, Rmax, doppler_to_speed, range_axis, speed_axis,...
     oversampling_symb, oversampling_chirp, min_val);
@@ -291,16 +301,26 @@ residueListRD = [residueListRD, residueRD];
 RangeListNOMP = RangeList .* ffreq_to_range ./ts;
 DopplerListNOMP = DopplerList .* doppler_to_speed;
 
-% Take the mean of 80% data variance
-tolerance = min(residueListRD)/10;
-for i = 2:length(residueListRD)
-    if residueListRD(i-1) - residueListRD(i) <= tolerance
-        residueListRD(i:end) = [];
-        break;
-    end
-end
- RangeListNOMP = RangeListNOMP(1:size(residueListRD,1));
- DopplerListNOMP = DopplerListNOMP(1:size(residueListRD,1));
+% Filter the data
+% if model ~= "Toy"
+%     % Filter out the range values more than size of the car
+%     z_score = abs((RangeListNOMP - mean(RangeListNOMP)) ./ std(RangeListNOMP));
+%     threshold = car_size/std(RangeListNOMP);
+%     RangeListNOMP = RangeListNOMP(z_score <= threshold);
+%      DopplerListNOMP = DopplerListNOMP(1:size(RangeListNOMP,1));
+%      residueListRD = residueListRD(1:size(RangeListNOMP,1));
+%     
+%     % Filter out doppler values more than 2 m/s deviation from the mean
+%     % This is done because in a practical scenario, a car would not have its
+%     % points relatively move more than 2m/s in opposite directions
+%     z_score = abs((DopplerListNOMP - mean(DopplerListNOMP)) ./ std(DopplerListNOMP));
+%     threshold = 2/std(DopplerListNOMP);
+%     DopplerListNOMP = DopplerListNOMP(z_score <= threshold);
+% 
+%  RangeListNOMP = RangeListNOMP(1:size(DopplerListNOMP,1));
+%  residueListRD = residueListRD(1:size(DopplerListNOMP,1));
+% end
+
 
 % plot_NOMP_results(PlotResultsFlag, ffreq_vect, doppler_vect, ffreq_to_range, doppler_to_speed, ...
 %     RangeList, DopplerList, gainListRD, Rmin, Rmax);
@@ -342,9 +362,9 @@ omega_estNOMP = angle_NOMP(RangeListNOMP, ...
 %
 
 % Doppler Refinement 
-% beacons_estimate = exp(-1i*omega_estNOMP(1)*(0:N_tx-1))*beacon_pool; % (N_points x N-beacons)
+% beacons_estimate = exp(1i*omega_estNOMP(1)*(0:N_tx-1))*beacon_pool; % (N_points x N-beacons)
 % for beacon = 1:N_beacons
-%         y_refine(beacon,:,:) = y_rx(beacon,:,:) * beacons_estimate(:,beacon);
+%         y_refine(beacon,:,:) = y_rx(beacon,:,:) * conj(beacons_estimate(:,beacon));
 %     
 % end
 % 

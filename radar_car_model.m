@@ -31,7 +31,7 @@ function [sph_n,com, normals] = car_model(model,range_translation , angle_thresh
         model_reflectors(visible_cart_v, threshold, k, disp_pc, angle_threshold);
 
      % Hawkeye model
-     blb_cart_v = model_point_reflector(visible_cart_v,car_scene_v.bbox);
+     blb_cart_v = model_point_reflector(visible_cart_v,car_scene_v.bbox, disp_pc);
 
     if model == "edge"
         [sph_n(:,1),sph_n(:,2),sph_n(:,3)] = cart2sph(strong_reflectors(:,1),strong_reflectors(:,2),strong_reflectors(:,3));
@@ -50,6 +50,7 @@ function car_v= loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc)
     % is the number of points and 3 values are the cartesian coordinates
     % unit is mm
     load(sprintf(path_to_pointCloud,CAD_idx));
+    disp_pc = 0;
     if(disp_pc)
         % Visulize the original point cloud
         figure; 
@@ -57,7 +58,8 @@ function car_v= loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc)
         cart_v_plot = datasample(cart_v, 1000); % downsampling when plotting
         scatter3(cart_v_plot(:,1),cart_v_plot(:,2),cart_v_plot(:,3),10,'filled','k'); hold on;
         xlabel('x (mm)'); ylabel('y (mm)'); zlabel('z (mm)'); axis equal;
-        set(gca,'FontSize',30) % Creates an axes and sets its FontSize to 18
+        set(gca,'FontSize',10) % Creates an axes and sets its FontSize to 18
+        view([-12,14]);
         title('Original point cloud');
         clear cart_v_plot;
     end
@@ -97,8 +99,8 @@ function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
     %translate_x_rng = (translate_lim(1,1) - car_scene_v.lim(1,1)):translate_x_res:(translate_lim(1,2) - car_scene_v.lim(2,1)); 
     %translate_y_rng = (translate_lim(2,1) - car_scene_v.lim(1,2)):translate_y_res:(translate_lim(2,2) - car_scene_v.lim(2,2));
     % randomly select a translation distances
-    translate_x = floor(-5000 + rand(1)*range_translation*1000); % in mm
-    translate_y = floor(rand(1)*range_translation*3000); % in mm
+    translate_x = floor((-0.5 + rand(1))*range_translation*1000); % in mm
+    translate_y = floor(rand(1)*range_translation*1000); % in mm
     translate_z = 0;
 
     % translate
@@ -118,9 +120,12 @@ function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
         scatter3(cart_v_plot(:,1),cart_v_plot(:,2),cart_v_plot(:,3),10,'filled','k'); hold on;
         scatter3(car_scene_v.bbox(:,1), car_scene_v.bbox(:,2),car_scene_v.bbox(:,3),'r'); hold on;
         xlabel('x (m)'); ylabel('y (m)'); zlabel('z (m)'); axis equal;
-        xlim([0 12]);
-        ylim([0 12]);
-        set(gca,'FontSize',30) % Creates axes
+      
+        xlim([min(cart_v_plot(:,1))-4 max(cart_v_plot(:,1))+4]);
+        ylim([0 max(cart_v_plot(:,2))+2]);
+        zlim([0 max(cart_v_plot(:,3))+2]);
+        set(gca,'FontSize',10) % Creates axes
+        view([-12,14]);
         title('Rotated and translated point cloud');
     end
 end
@@ -132,9 +137,10 @@ function [strong_reflectors,normal_reflectors, normals] = ...
     % we assume points close to large changes in the surface normal also
     % strongly reflect towards the Radar
     
+    
     %Point Cloud data structure
     ptCloud = pointCloud(visible_PC);
-    
+    disp_pc = 0;
     % Normal Esitmation 
     normals = pcnormals(ptCloud);
     ptCloud.Normal = normals; 
@@ -191,9 +197,9 @@ function [strong_reflectors,normal_reflectors, normals] = ...
         scatter3(strong_reflectors(:,1),strong_reflectors(:,2),strong_reflectors(:,3),20,'filled','k');
         title('Strong reflectors of Point Cloud');
         legend('Normal reflector', 'Edge reflector');
-        xlim([0 12]);
-        ylim([0 12]);
-        set(gca,'FontSize',30) % Creates axes
+        xlim([min(normal_reflectors(:,1))-4 max(normal_reflectors(:,1))+4]);
+        ylim([0 max(normal_reflectors(:,1))+2]);
+        
         xlabel('x (m)'); ylabel('y (m)'); zlabel('z (m)'); axis equal;
         hold off;
     end
@@ -229,7 +235,7 @@ end
 %%%% Hawkeye code%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-function blb_cart_v = model_point_reflector(visible_cart_v,bbox)
+function blb_cart_v = model_point_reflector(visible_cart_v,bbox, disp_pc)
 % Model radar point reflectors in the scene
 % Input: 'visible_cart_v': point cloud of the visible body of the car (cartesian coordinates) 
 %        'bbox': bounding box of the car
@@ -323,6 +329,19 @@ function blb_cart_v = model_point_reflector(visible_cart_v,bbox)
             blb_cart_v = [blb_cart_v;[visible_cart_v(ptInBlb,1),visible_cart_v(ptInBlb,2),visible_cart_v(ptInBlb,3)]];
         end
         blb_cart_v = unique(blb_cart_v,'row');
+
+        if(disp_pc)
+            figure; 
+            cart_v_plot = blb_cart_v; % downsampling when plotting
+            scatter3(cart_v_plot(:,1),cart_v_plot(:,2),cart_v_plot(:,3),10,'filled','k'); hold on;
+            xlabel('x (m)'); ylabel('y (m)'); zlabel('z (m)'); axis equal;
+            xlim([min(cart_v_plot(:,1))-4 max(cart_v_plot(:,1))+4]);
+            ylim([0 max(cart_v_plot(:,2))+2]);
+            zlim([0 max(cart_v_plot(:,3))+2]);
+            set(gca,'FontSize',10) % Creates an axes and sets its FontSize to 18
+            view([-12,14]);
+            title('Point cloud reflectors')
+        end
     end
 end
 

@@ -8,6 +8,7 @@ true_z = true_targets(:,3);
 det_x = detected_targets(:,1);
 det_y = detected_targets(:,2);
 det_z = detected_targets(:,3);
+
 plot3(true_x, true_y,true_z,'o');
 hold on;
 plot3(det_x, det_y, det_z,'x');
