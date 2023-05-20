@@ -42,6 +42,9 @@ gainList  = [];
 y_r = y;
 
 residueList = [ y_r' * y_r ];
+iteration = 0;
+% fig_i = figure();
+% subplot_i = 1;
 
 while true
     
@@ -49,11 +52,17 @@ while true
     % becomes small; *** how small *** determined by *** tau ***
     
     % detect gain and frequency of an additional sinusoid
-    [omega_new, gain_new, y_r, res_inf_normSq_rot] = ...
+    [omega_new, gain_new, y_r, prob, res_inf_normSq_rot] = ...
         detectNew(y_r, sampledManifold);
     % detecttNew removes the contribution of the newly detected
     % from the old residue  y_r(input) and reports the new residual
     % measurement y_r (output)
+
+    
+    angle_axis = sampledManifold.coarseOmega;
+%     subplot_i= plotResidue(prob, iteration , angle_axis ,fig_i,...
+%         subplot_i);
+%     iteration = iteration+1;
     
     % stopping criterion:
     if res_inf_normSq_rot < tau
@@ -106,7 +115,7 @@ end
 
 % --------------------------------------------------------------------
 
-function [omega, gain, y_r, res_inf_normSq_rot] = detectNew(y,...
+function [omega, gain, y_r, prob, res_inf_normSq_rot] = detectNew(y,...
 					 sampledManifold)
 % SUMMARY:
 % 
@@ -436,4 +445,20 @@ if ~is_eye
         sum(abs(sampledManifold.map_IfftMat).^2, 1);
     
 end
+end
+
+
+function subplot_i = plotResidue(power_residue, iteration , angle_axis ,fig_i,...
+        subplot_i)
+    
+    if (mod(iteration,3) == 0 )&& (subplot_i < 4)
+        figure(fig_i); hold on;
+        subplot(2,2,round(subplot_i));
+        plot(angle_axis, 20*log10(power_residue ));
+%         set(h,'edgecolor','none');view(2);
+        % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);
+%         xlim([Rmin,Rmax]); ylim([-1,1]*pi*doppler_to_speed)
+        ylabel(['after ',num2str(iteration),' extraction(s)']);
+        subplot_i = subplot_i +1;
+    end
 end

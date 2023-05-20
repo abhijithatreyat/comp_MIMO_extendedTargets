@@ -6,8 +6,9 @@ function [target_bins, detected_range] = extract_targets(N_target,power_bins, ex
 
 % EXTRACT_TARGETS identifies targets from a range-doppler signal power residue
 detected_range = [];
-window = true; % Oversampled FFT does not require windowing
 plot_id = 0;
+patch_model = 1;
+window = 1;
 for i_target = 1:N_target
     [max_v,ind_row_vect] = max(power_residue);
     [~,ind_col] = max(max_v);
@@ -26,12 +27,15 @@ for i_target = 1:N_target
     
     %%% Window the signal 
     if (window)
-        for chirp_i = 1:N_chirp
-            y0(1,chirp_i,:)  = reshape(y0(1,chirp_i,:),N_symb,1).* hann(length(y0)) ;   
+        if(patch_model)
+           
+            for chirp_i = 1:N_chirp
+                y0(1,chirp_i,:)  = reshape(y0(1,chirp_i,:),N_symb,1).* kaiser(N_symb,30) ;   
+            end
         end
         %%% Window the signal in doppler domain
         for syms_i = 1:N_symb
-            y0(1,:,syms_i)= reshape(y0(1,:,syms_i),N_chirp,1).*hann(size(y0,2));
+            y0(1,:,syms_i)= reshape(y0(1,:,syms_i),N_chirp,1).* kaiser(N_chirp,30);
         end
     end
    

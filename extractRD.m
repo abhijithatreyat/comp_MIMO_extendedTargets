@@ -236,11 +236,11 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
     
    if (window)
         for chirp_i = 1:L
-            x_theta(1,chirp_i,:)  = reshape(x_theta(1,chirp_i,:),M,1).* hann(length(x_theta)) ;   
+            x_theta(1,chirp_i,:)  = reshape(x_theta(1,chirp_i,:),M,1).* kaiser(length(x_theta),30) ;   
         end
         %%% Window the signal in doppler domain
         for syms_i = 1:M
-            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*hann(size(x_theta,2));
+            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*kaiser(size(x_theta,2),30);
         end
    end
 
@@ -305,11 +305,11 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
     
     if (window)
         for chirp_i = 1:L
-            x_theta(1,chirp_i,:)  = reshape(x_theta(1,chirp_i,:),M,1).* hann(length(x_theta)) ;   
+            x_theta(1,chirp_i,:)  = reshape(x_theta(1,chirp_i,:),M,1).* kaiser(length(x_theta),30) ;   
         end
         %%% Window the signal in doppler domain
         for syms_i = 1:M
-            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*hann(size(x_theta,2));
+            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*kaiser(size(x_theta,2),30);
         end
     end
     
@@ -319,14 +319,8 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
         
         % UPDATE RESIDUE
         y_r_next(i_beacon,:,:) = y(i_beacon) - gain_next*x_theta;
-%         if (y_r_next(i_beacon,:)*y_r_next(i_beacon,:)') <= (y_r(i_beacon,:)*y_r(i_beacon,:)')
-%             % commit only if the residue decreases
-%             omega_r = omega_r_next;
-%             omega_d = omega_d_next;
-%             h_l = gain_next;
-%             y_r(i_beacon) = y_r_next(i_beacon);
-%         end
-   %end
+       
+   end
         % check for decrease in residue -  needed as a result of 
         % non-convexity of residue (even when the cost surface 
         % is locally convex); This is the same as checking whether 
@@ -339,7 +333,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
             h_l = gain_next;
             y_r(i_beacon) = y_r_next(i_beacon);
         end
-    end
+    
 end
 
 % --------------------------------------------------------------------

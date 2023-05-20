@@ -1,5 +1,5 @@
 function plot_targets_2D(true_targets, omega_vect, N_tx,...
-     N_chirp, detected_targets, stringVal)
+     N_chirp, detected_targets, g_list, stringVal)
 % Plots true and estimated targets in 2D space
 % Input arguments:
 % true_targets -  true range, doppler and azimuth
@@ -24,7 +24,7 @@ function plot_targets_2D(true_targets, omega_vect, N_tx,...
 
     plot(true_x, true_y, 'o');
     hold on;
-    plot(det_x, det_y, 'x');
+    scatter(det_x, det_y, g_list./max(g_list)*10, 'filled');
     hold on;
     plot(0,0,'ko');
     xlabel('x (m)'); ylabel('y (m)');
