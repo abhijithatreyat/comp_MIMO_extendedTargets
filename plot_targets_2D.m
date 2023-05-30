@@ -1,4 +1,4 @@
-function plot_targets_2D(true_targets, omega_vect, N_tx,...
+function plot_targets_2D(true_targets,visible_cart_v, omega_vect, N_tx,...
      N_chirp, detected_targets, g_list, stringVal)
 % Plots true and estimated targets in 2D space
 % Input arguments:
@@ -21,19 +21,23 @@ function plot_targets_2D(true_targets, omega_vect, N_tx,...
     det_x = detected_targets(:,1) .* cosd(detected_targets(:,3));
     det_y = detected_targets(:,1) .* sind(detected_targets(:,3));
     det_speed = mean(detected_targets(:,2));
+    
+    plot(visible_cart_v(:,1), visible_cart_v(:,2), 'o', 'Color','g');
+    hold on;
 
     plot(true_x, true_y, 'o');
     hold on;
-    scatter(det_x, det_y, g_list./max(g_list)*10, 'filled');
+    marker_size = int16(g_list./max(g_list)*50+100);
+    scatter(det_x, det_y, marker_size, 'ro','LineWidth', 2.5);
     hold on;
     plot(0,0,'ko');
     xlabel('x (m)'); ylabel('y (m)');
     xlim([(min(true_x)-5), (max(true_x)+5)]);
     ylim([0, (max(true_y)+5)]);
     legend('True', 'Estimated','Radar location');
-    txt = ['True speed: ' num2str(true_speed) 'm/s'];
-    txt2 =['Estimated speed: ' num2str(det_speed) 'm/s'];
-    text(1,1,txt);
-    text(1,3,txt2);
+%     txt = ['True speed: ' num2str(true_speed) 'm/s'];
+%     txt2 =['Estimated speed: ' num2str(det_speed) 'm/s'];
+%     text(1,1,txt);
+%     text(1,3,txt2);
     title('Estimated and true targets in 2D space for' + stringVal);
 end

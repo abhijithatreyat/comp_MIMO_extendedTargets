@@ -1,7 +1,7 @@
 %% NOMP Functoins for angle estimation%%
 
 function [omegaList, gainList, residueList] = extractSpectrum_MR(y, S,...
-			      	   tau, overSamplingRate, numRefine)
+			      	   tau, overSamplingRate, numRefine, window, r_est)
 % SUMMARY:
 % 
 %   given measurements: y = S * (mixture of sinusoids) + white noise
@@ -53,13 +53,12 @@ while true
     
     % detect gain and frequency of an additional sinusoid
     [omega_new, gain_new, y_r, prob, res_inf_normSq_rot] = ...
-        detectNew(y_r, sampledManifold);
+        detectNew(y_r, sampledManifold, window, r_est);
     % detecttNew removes the contribution of the newly detected
     % from the old residue  y_r(input) and reports the new residual
     % measurement y_r (output)
 
-    
-    angle_axis = sampledManifold.coarseOmega;
+
 %     subplot_i= plotResidue(prob, iteration , angle_axis ,fig_i,...
 %         subplot_i);
 %     iteration = iteration+1;
@@ -73,7 +72,7 @@ while true
     % imitate detection on the continuum
     for i = 1:numRefine
         [omega_new, gain_new, y_r] = refineOne(y_r, omega_new, ...
-            gain_new, S, sampledManifold.ant_idx, true);
+            gain_new, S, sampledManifold.ant_idx, true, window, r_est);
     end
     % refineOne checks whether the refinement step decreases
     % the l-2 norm of the residue y_r
@@ -85,7 +84,7 @@ while true
     % refine all frequencies detected so far
     % can be interpreted as a search for better frequency supports
     [omegaList, gainList, y_r] = refineAll(y_r, omegaList,...
-        gainList, S, sampledManifold.ant_idx, numRefine);
+        gainList, S, sampledManifold.ant_idx, numRefine, window, r_est);
     % refineAll only uses refineOne to tweak parameters and the energy 
     % in the residual measurements y_r can only decrease as a result
 
@@ -116,7 +115,7 @@ end
 % --------------------------------------------------------------------
 
 function [omega, gain, y_r, prob, res_inf_normSq_rot] = detectNew(y,...
-					 sampledManifold)
+					 sampledManifold, window, r_est)
 % SUMMARY:
 % 
 % 	detects a new sinusoid on the coarse grid
@@ -162,16 +161,36 @@ end
 
 omega = sampledManifold.coarseOmega(IDX);
 gain = gains(IDX);
+% Patch size deoends on the detected range
+patch_size = 100/mean(r_est);
+ wpatch_ID = [];
+for i = -round(patch_size/2) : round(patch_size/2)
+   wpatch_ID = [wpatch_ID, IDX+i];
+end
+wpatch_ID = wpatch_ID(wpatch_ID>=1 & wpatch_ID <=1024);
+
+omega = sampledManifold.coarseOmega(wpatch_ID);
 
 % compute the response corresponding to the
 % current estimate of the sinusoid
+x = 0;
 if sampledManifold.is_eye
     x = exp(1j*sampledManifold.ant_idx * omega)...
         /sqrt(sampledManifold.length);
 else
-    x = sampledManifold.map_IfftMat(:,IDX);
+    for i = 1 : length(wpatch_ID)
+        val = sampledManifold.map_IfftMat(:,wpatch_ID(i));
+        x = x + val;
+    end
+    x = x / norm(x , "fro");
 end
 
+
+
+if (window)
+    
+        x= x.* kaiser(length(x),30) ;    
+end
 % residual measurements after subtracting
 % out the newly detected sinusoid
 y_r = y - gain * x;
@@ -182,13 +201,14 @@ y_r = y - gain * x;
 % over estimate the size of the support set)
 
 res_inf_normSq_rot = max(prob(1:OSR:end));
+omega = sampledManifold.coarseOmega(IDX);
 
 end
 
 % --------------------------------------------------------------------
 
 function [omega, gain, y_r] = refineOne(y_r, omega, gain, S,...
-			 ant_idx, isOrth)
+			 ant_idx, isOrth, window,r_est)
 % SUMMARY:
 %   Refines parameters (gain and frequency) of a single sinusoid
 %   and updates the residual measurement vector y_r to reflect
@@ -217,7 +237,28 @@ else
 end
 
 N = length(ant_idx);
-x_theta  = exp(1j*ant_idx*omega)/sqrt(N);
+%Patch size depends on the detected range
+patch_size = 100/mean(r_est);
+
+w_patch = [];
+    for i = -round(patch_size)*N/2/pi : 0.1*N/2/pi  :round(patch_size)*N/2/pi 
+       if omega+i <0 || omega+i > 2*pi
+           continue;
+       end
+       w_patch = [w_patch, omega+i];
+    end
+
+
+    x = 0;
+   for j = 1 :length(w_patch)
+    val = exp(1j*ant_idx*w_patch(j))/sqrt(N);
+    x = x +val;
+   end
+
+x_theta = x/norm(x,"fro");
+
+
+% x_theta  = exp(1j*ant_idx*omega)/sqrt(N);
 dx_theta = 1j * ant_idx .* x_theta;
 d2x_theta = -(ant_idx.^2) .* x_theta;
 
@@ -258,7 +299,10 @@ end
 
 % COMPUTE x_theta for omega_next so that we can compute 
 % gains_next and y_r_next
-x_theta  = exp(1j*ant_idx*omega_next)/sqrt(N);
+
+x_theta  = sum(exp(1j*ant_idx*omega_next)/sqrt(N), 2);
+
+
 if is_eye
     energy = 1;
 else
@@ -313,7 +357,7 @@ end
 % --------------------------------------------------------------------
 
 function [omegaList, gainList, y_r] = refineAll(y_r, omegaList,...
-    gainList, S, ant_idx, numRefine)
+    gainList, S, ant_idx, numRefine, window, r_est)
 % SUMMARY:
 %   uses refineOne algorithm to refine frequencies and gains of
 %   of all sinusoids
@@ -355,7 +399,7 @@ for i = 1:numRefine
         % refine our current estimates of (gain, omega) of the
         % l-th sinusoid
         [omega, gain, y_r] = refineOne(y_r,...
-			       omega, gain, S, ant_idx, false);
+			       omega, gain, S, ant_idx,false, window, r_est);
         omegaList(l) = omega;
         gainList(l) = gain;
         % refineOne ensures that (gain, omega) pair are altered iff

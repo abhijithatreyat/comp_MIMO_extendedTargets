@@ -1,8 +1,8 @@
 %% Two Dinensioal NOMP functions
 
 function [omegaRangeList,omegaDopplerList, gainList, res_infoList] = extractRD(y,y_RD,...
-			      	   tau, numRefine, window, Nbins, Rmin, Rmax, doppler_to_speed, ...
-                       range_axis, speed_axis, overSamplingRate_R, overSamplingRate_D, minVal)
+			      	   tau, numRefine, window, Nbins, Rmin, Rmax , doppler_to_speed, ...
+                       range_axis, speed_axis, overSamplingRate_R, overSamplingRate_D, minVal,PlotResultsFlag)
 % SUMMARY:
 % 
 %   given measurements: y = S * (mixture of sinusoids) + white noise
@@ -71,21 +71,23 @@ while timer<20
     % detect gain and frequency of an additional sinusoid
     [omega_new_range, omega_new_doppler, y_r, y_rd_residue, power_residue,...
         h_l, res_inf_normSq_rot] =...
-        detectNewRD(y_r, y_rd_residue, sampledManifold, window, power_residue);
+        detectNewRD(y_r, y_rd_residue, sampledManifold, window,...
+        power_residue,Rmax);
     % detecttNew removes the contribution of the newly detected
     % from the old residue  y_r(input) and reports the new residual measurement y_r (output)
     res_infoList = [res_infoList ; res_inf_normSq_rot];
     
     % residue
-   subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
-                fig_2, Rmin, Rmax, doppler_to_speed, subplot_i, minVal);
-
+    if(PlotResultsFlag)
+        subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
+            fig_2, Rmin, Rmax, doppler_to_speed, subplot_i, minVal);
+    end
     % newly detected sinusoid is coarse - so we refine it to 
     % imitate detection on the continuum
     for i = 1:numRefine
         [omega_new_range, omega_new_doppler, h_l, y_r] = refineOne(y_r, omega_new_range,...
             omega_new_doppler, h_l, sampledManifold.ant_idx_range,...
-            sampledManifold.ant_idx_doppler, true,window);
+            sampledManifold.ant_idx_doppler, true,window, Rmax);
     end
     % refineOne checks whether the refinement step decreases
     % the l-2 norm of the residue y_r
@@ -98,7 +100,7 @@ while timer<20
     % refine all frequencies detected so far
     % can be interpreted as a search for better frequency supports
     [omegaRangeList,omegaDopplerList, gainList, y_r] = refineAll(y_r, omegaRangeList,...
-        omegaDopplerList, gainList, sampledManifold, numRefine,window);
+        omegaDopplerList, gainList, sampledManifold, numRefine,window, Rmax);
     % refineAll only uses refineOne to tweak parameters and the energy 
     % in the residual measurements y_r can only decrease as a result
 
@@ -123,8 +125,9 @@ end
 end
 
 
-function [omega_range, omega_doppler, y_r, y_rd_residue, power_residue, h_l, res_inf_normSq_rot] = detectNewRD(y_r, y_rd_residue, ...
-					 sampledManifold,window, power_residue)
+function [omega_range, omega_doppler, y_r, y_rd_residue,...
+    power_residue, h_l, res_inf_normSq_rot] = detectNewRD(y_r, y_rd_residue, ...
+					 sampledManifold,window, power_residue, Rmax)
 % SUMMARY:
 % 	detects a new sinusoid on the coarse grid
 % INPUT:
@@ -158,26 +161,39 @@ function [omega_range, omega_doppler, y_r, y_rd_residue, power_residue, h_l, res
    [~,ind_col] = max(max_v);
    ind_row = ind_row_vect(ind_col);
    % Detect the range and doppler values
-   omega_range = sampledManifold.coarseOmega_range(ind_col);
-   omega_doppler = angle(exp(-1j*sampledManifold.coarseOmega_doppler(ind_row)));
+   % Size of patch is car length (Assume 0.3m) 
+   patch_size = round(1*R1/Rmax);
+   Rpatch_ID = [];
+   for i = -round(patch_size/2) : 0.1 : round(patch_size/2)
+       if ind_col+i < 1 || ind_col+i > 1023
+           continue;
+       end
+       Rpatch_ID = [Rpatch_ID, ind_col+i];
+   end
+  
+%    omega_range = sampledManifold.coarseOmega_range(Rpatch_ID);
+%    omega_doppler = angle(exp(-1j*sampledManifold.coarseOmega_doppler(ind_row)));
    
-   omega_range = 2*pi*(ind_col-1)/R1; % equivalent range frequency 
+    omega_range = 2*pi*(Rpatch_ID-1)/R1; % equivalent range frequency 
     % of largest peak
     omega_doppler = angle(exp(-1i*2*pi*(ind_row-1)/R2)); % equivalent
 
    % compute the response corresponding to the
    % current estimate of the sinusoid
-        
-   x = reshape(exp(-1i*omega_doppler*(0:N_chirp-1)')* ...
-        exp(1i*omega_range*(0:N_symb-1)),1,N_chirp,N_symb);
-    
+   x = 0;
+   for j = 1 :length(Rpatch_ID)
+    val = reshape(exp(-1i*omega_doppler*(0:N_chirp-1)')* ...
+        exp(1i*omega_range(i)*(0:N_symb-1)),1,N_chirp,N_symb);
+    x = x +val;
+   end
+   x = x / norm(x, "fro");
    if (window)
         for chirp_i = 1:N_chirp
-            x(1,chirp_i,:)  = reshape(x(1,chirp_i,:),N_symb,1).* hann(length(x)) ;   
+            x(1,chirp_i,:)  = reshape(x(1,chirp_i,:),N_symb,1).* kaiser(length(x),30) ;   
         end
         %%% Window the signal in doppler domain
         for syms_i = 1:N_symb
-            x(1,:,syms_i)= reshape(x(1,:,syms_i),N_chirp,1).*hann(size(x,2));
+            x(1,:,syms_i)= reshape(x(1,:,syms_i),N_chirp,1).*kaiser(size(x,2),40);
         end
    end
 
@@ -199,7 +215,8 @@ function [omega_range, omega_doppler, y_r, y_rd_residue, power_residue, h_l, res
    % we check only DFT frequencies - gives us a handle
    % the false alarm rate (a measure of how often we would
    % over estimate the size of the support set)
-  res_inf_normSq_rot = sqrt(max(max(power_residue(1:OSR(1):end, 1:OSR(2):end)))); %TODO: verify this
+   omega_range = 2*pi*(ind_col-1)/R1;
+   res_inf_normSq_rot = sqrt(max(max(power_residue(1:OSR(1):end, 1:OSR(2):end)))); %TODO: verify this
 
 
 end
@@ -207,7 +224,7 @@ end
 % --------------------------------------------------------------------
 
 function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
-			 ant_idx_r, ant_idx_d, isOrth,window)
+			 ant_idx_r, ant_idx_d, isOrth,window, Rmax)
 % SUMMARY:
 %   Refines parameters (gain and frequency) of a single sinusoid
 %   and updates the residual measurement vector y_r to reflect
@@ -231,8 +248,26 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
     L = length(ant_idx_d);
     N_beacons = size(y_r,1);
 
-    x_theta = reshape(exp(-1i*omega_d*(0:L-1)')* ...
-        exp(1i*omega_r*(0:M-1)),1,L,M);
+   % Detect the range and doppler values
+   % Size of patch is car length (Assume 1m) 
+   patch_size = round(1*M/Rmax);
+
+    range_patch = [];
+    for i = -patch_size*M/2/pi : 0.1*M/2/pi  :patch_size*M/2/pi 
+       if omega_r+i <0
+           continue;
+       end
+       range_patch = [range_patch, omega_r+i];
+    end
+
+    x = 0;
+   for j = 1 :length(range_patch)
+    val = reshape(exp(-1i*omega_d*(0:L-1)')* ...
+        exp(1i*range_patch(j)*(0:M-1)),1,L,M);
+    x = x +val;
+   end
+
+    x_theta = x/norm(x,"fro");
     
    if (window)
         for chirp_i = 1:L
@@ -240,7 +275,7 @@ function [omega_r,omega_d, h_l, y_r] = refineOne(y_r, omega_r, omega_d, h_l,...
         end
         %%% Window the signal in doppler domain
         for syms_i = 1:M
-            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*kaiser(size(x_theta,2),30);
+            x_theta(1,:,syms_i)= reshape(x_theta(1,:,syms_i),L,1).*kaiser(size(x_theta,2),40);
         end
    end
 
@@ -339,7 +374,7 @@ end
 % --------------------------------------------------------------------
 
 function [omegaRangeList,omegaDopplerList, gainList, y_r] = refineAll(y_r, omegaRangeList,...
-        omegaDopplerList, gainList, sampledManifold, numRefine, window)
+        omegaDopplerList, gainList, sampledManifold, numRefine, window, Rmax)
 % SUMMARY:
 %   uses refineOne algorithm to refine frequencies and gains of
 %   of all sinusoids
@@ -380,7 +415,7 @@ for i = 1:numRefine
         % refine our current estimates of (gain, omega) of the
         % l-th sinusoid
         [omega_r,omega_d, gain, y_r] = refineOne(y_r, omega_r, omega_d, gain,...
-			 sampledManifold.ant_idx_range, sampledManifold.ant_idx_doppler, false, window);
+			 sampledManifold.ant_idx_range, sampledManifold.ant_idx_doppler, false, window, Rmax);
       
         omegaRangeList(l) = omega_r;
         omegaDopplerList(l) = omega_d;
@@ -442,9 +477,9 @@ end
 function subplot_i = plotResidue(power_residue, iteration , range_axis,speed_axis ,fig_2,...
     Rmin, Rmax, doppler_to_speed, subplot_i, minVal)
     
-    if (mod(iteration,3) == 0 )&& (subplot_i < 4)
+    if (subplot_i < 7)
         figure(fig_2); hold on;
-        subplot(2,2,subplot_i);
+        subplot(2,3,subplot_i);
         h = surf(range_axis,speed_axis,20*log10(power_residue + minVal));
         set(h,'edgecolor','none');view(2);
         % xlim([0,N_symb*oversampling_symb]); ylim([0,N_chirp*oversampling_chirp]);
