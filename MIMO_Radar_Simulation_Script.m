@@ -15,11 +15,59 @@ SimParameters.perSymb_SNR_dB = -5; % mean per sample SNR when one transmitter is
 SimParameters.T_gap = 512; % duration between consecutive chirps (as multiples of symbol period)
 SimParameters.DR = 10; % dynamic range of target signal amplitudes
 
-%% single run for visual representation
+%%
+
+%Car model parameters
+% Choose between different models 
+model = "normal" ; % Options : edge , normal , Hawkeye, Toy  (Default : Hawkeye)
+range_translation = 20; % Expected amount of translation in the range axis (m)
+                        % Keep below 70m
+car_size = 10; % size of the car ( change this to make the car a truck :) ) 
+angle_threshold = 160; % Parameter for normal model only
+
+variables;
+com_velocity = [];
+
+
+
+if  model == "Toy"
+    sph_v = car_toy_model(range_translation, car_size);
+    sph_vector = sph_v;
+else
+    [ sph_n, com , car_scene_v, bbox] = radar_car_model(model, range_translation, angle_threshold);
+    visible_cart_v = car_scene_v.cart_v;
+    sph_vector = sph_n;
+end
+
+% single run for visual representation
 if single_run
     PlotResultsFlag = true; % plot the pretty pictures
     N_target = 10;
-    SimulateMIMORadarFrame(N_target,SimParameters,PlotResultsFlag);
+    
+    SimulateMIMORadarFrame(sph_vector,visible_cart_v,...
+        N_target,model,SimParameters,PlotResultsFlag, single_run,com_velocity);
+else
+    PlotResultsFlag = true; % plot the pretty pictures
+    N_target = 10;
+    estimate = [];
+    for runs = 0 :0.1:.5
+        translate_x = 0.25* runs; 
+        translate_y = (-6.4)* runs; 
+        translate_z = 0;
+        sph_v = [];
+        
+        translate = [translate_x, translate_y, translate_z];
+        car_scene_v.cart_v = car_scene_v.cart_v + translate;
+        bbox = car_scene_v.bbox + translate;
+        visible_v = remove_occlusion(car_scene_v);
+
+        blb_cart_v = model_point_reflector(visible_v,bbox, false);
+        [sph_v(:,1),sph_v(:,2),sph_v(:,3)] = cart2sph(blb_cart_v(:,1),blb_cart_v(:,2),blb_cart_v(:,3));
+
+        estimate = [estimate; SimulateMIMORadarFrame(sph_v,visible_cart_v,...
+         N_target,model,SimParameters,PlotResultsFlag, single_run,com_velocity)];
+    end
+    save('multi-run');
 end
 
 
@@ -57,7 +105,8 @@ end
 %% main function that runs sim:
 % --------------------------------------------------------------------------------------------------------------
 
-function error_mat = SimulateMIMORadarFrame(N_target,SimParameters,PlotResultsFlag)
+function detected_targets = SimulateMIMORadarFrame(sph_vector,visible_cart_v,...
+    N_target,model,SimParameters,PlotResultsFlag, single_run, com_velocity)
 % Simulates one frame of target acquisition for settings provided in
 % SimParameters object. If none or incorrectly provided, default settings
 % used.
@@ -65,85 +114,8 @@ function error_mat = SimulateMIMORadarFrame(N_target,SimParameters,PlotResultsFl
 % PlotResultsFlag: if true, will plot range-doppler heatmaps after each
 % target extraction
 
-%% initialize and simulate frame response
-%%% Fields required in SimParameters object:
-%%% (initialized with default values)
-N_tx = 128; % number of elements in TX phased array
-N_rx = 1; % number of elements in digital receiver
-N_beacons = 15; % number of compressive beacons (subframes)
-N_chirp = 32; % number of chirps in each subframe(Sampling rate of the ADC)
-N_symb = 256;  % number of samples in a single chirp
-perSymb_SNR_dB = -5; % mean per sample SNR when one transmitter is active
-T_gap = 512; % duration between consecutive chirps (as multiples of symbol period)
-DR = 10; % dynamic range of target signal amplitudes
-c = 3e8; % speed of light
-fs = 60e6; % Sampling rate of the Rx ADC ( This is B in the paper)
-ts = 1/fs; % symbol period 
-t_ax = 0:ts:((ts*N_symb)-ts); t_ax = t_ax.';% time axis
-Tc = (ts*N_symb); % Chirp duration
-BW = 500e6; % BW of the chirp 
-chirp_slope = BW/Tc; % slope of chirp frequency ramp in Hz/s
-fc = 60e9; lambda = c/fc; % carrier frequency, wavelength
+variables;
 
-%Car model parameters
-% Choose between different models 
-model = "Hawkeye" ; % Options : edge , normal , Hawkeye, Toy  (Default : Hawkeye)
-range_translation = 10; % Expected amount of translation in the range axis (m)
-                        % Keep below 70m
-car_size = 5; % size of the car ( change this to make the car a truck :) ) 
-angle_threshold = 160; % Parameter for normal model only
-
-% Antenna specific variables
-TX_pos = [0,0,0]; % Tx antenna position (x,y,z) 
-RX_pos = [10,0,0]; % Rx antenna position (x,y,z)
-array_spacing = lambda/2; % antenna element spacing
-array_idx = (1:N_tx)-ceil(N_tx/2);
-array_size = [1,1];
-radar_FoV = [0,pi];
-array_x_m = array_idx*array_spacing;
-
-% Detection variables
-N_target = 4;
-window = false;
-oversampling_symb = 4; % range FFT oversampling rate
-oversampling_chirp = 32;%2^ceil(log(N_beacons)/log(2)+1); % doppler FFT oversampling rate
-
-%Plot variables
-PlotResultsFlag = true; % plot the pretty pictures
-num_subplot_rows = 2; % floor(sqrt(N_target+extra_bins));
-num_subplot_cols = 2; % ceil(N_target+extra_bins/num_subplot_rows);
-
-noise_power = 10^(-perSymb_SNR_dB/10);
-%%% Range limits
-Rmin = 0;
-Rmax = fs*c / 2 / chirp_slope ;
-
-%%% Fast frequency guard bins are removed
-ffreq_guard_bins = min(2,floor(N_symb*0.01));
-min_ffreq = ffreq_guard_bins*2*pi/N_symb;
-max_ffreq = 2*pi - ffreq_guard_bins*2*pi/N_symb;
-
-%%% doppler offsets, unit: radians per chirp duration 
-% % (total time between start of two consecutive chirps)
-doppler_guard_bins = min(2,floor(N_chirp*0.01));
-min_doppler = -pi + doppler_guard_bins*2*pi/N_chirp;
-max_doppler =  pi - doppler_guard_bins*2*pi/N_chirp;
-
-%%% angles, represented by SPATIAL FREQUENCY on the (linear) TX array
-omega_guard_bins = min(2,floor(N_tx*0.01));
-min_omega = -pi + omega_guard_bins*2*pi/N_tx;
-max_omega =  pi - omega_guard_bins*2*pi/N_tx;
-
-%%% draw target delay, doppler, angles (equivalent spatial frequencies)
-%%% from car model
-
-if  model == "Toy"
-    sph_v = car_toy_model(range_translation, car_size);
-    sph_vector = sph_v;
-else
-    [ sph_n, com , normals] = radar_car_model(model, range_translation, angle_threshold);
-    sph_vector = sph_n;
-end
 
 % sph_vector = datasample(sph_vector, 10); % Randomly choose 10 reflectors
 N_points = numel(sph_vector(:,1));
@@ -170,12 +142,7 @@ omega_vect = azimuth_vec'; % Azimuth cmg from (R,theta,phi)
 % Doppler vector generation
 % COM moves in a random direction in X-Y plane
 speed_to_doppler = 2*pi*(ts*(N_symb+T_gap))/lambda;
-min_speed = min_doppler *speed_to_doppler; % m/s
-max_speed = max_doppler *speed_to_doppler; % m/s
-% Velocity is generated in a random direction (Refinement: Find the
-% orientation of the car and move it in that direction
-com_velocity = min_speed + (max_speed - min_speed).*rand([1,2]);
-clear min_speed max_speed;
+
 % Calculate radial velocity of each point in the point cloud
 % Dot product between the velocity vector and each point
 [cart_x,cart_y,cart_z] = sph2cart(sph_vector(:,1), sph_vector(:,2), sph_vector(:,3));
@@ -207,7 +174,7 @@ beacon_pool = 1/sqrt(N_tx)*exp(1i*2*pi*rand(N_tx,N_beacons));
 A_CS = beacon_pool.';
 
 %%% compute compressive beacon gain for each target direction
-beacon_gains = exp(1i*omega_vect'*(0:N_tx-1))*beacon_pool; % Beacon gains: (N_points x N-beacons)
+beacon_gains = exp(1i*(omega_vect)'*(0:N_tx-1))*beacon_pool; % Beacon gains: (N_points x N-beacons)
 
 %%% generate raw received signal over one frame
 y_rx = zeros(N_beacons,N_chirp,N_symb);
@@ -224,21 +191,21 @@ y_rx = y_rx + sqrt(noise_power/2)*(randn(size(y_rx)) + 1i*randn(size(y_rx)));
 
 
 %%% Window the signal 
-if (window)
-for beacon_i = 1:N_beacons
-    for chirp_i = 1:N_chirp
-        y_rx(beacon_i,chirp_i,:)  = reshape(y_rx(beacon_i,chirp_i,:),N_symb,1).* ...
-            hann(length(y_rx)) ;
-    end
-end
-%%% Window the signal in doppler domain
-for beacon_i = 1:N_beacons
-    for syms_i = 1:N_symb
-        y_rx(beacon_i,:,syms_i)= reshape(y_rx(beacon_i,:,syms_i),N_chirp,1).*...
-            hann(size(y_rx,2));
-    end
-end
-end
+% if (window)
+% for beacon_i = 1:N_beacons
+%     for chirp_i = 1:N_chirp
+%         y_rx(beacon_i,chirp_i,:)  = reshape(y_rx(beacon_i,chirp_i,:),N_symb,1).* ...
+%             kaiser(length(y_rx),30) ;
+%     end
+% end
+% %%% Window the signal in doppler domain
+% for beacon_i = 1:N_beacons
+%     for syms_i = 1:N_symb
+%         y_rx(beacon_i,:,syms_i)= reshape(y_rx(beacon_i,:,syms_i),N_chirp,1).*...
+%             kaiser(size(y_rx,2),40);
+%     end
+% end
+% end
 %%% evaluate range-doppler domain signal ( 2D FFT)
 y_rd = zeros(N_beacons, N_chirp*oversampling_chirp, N_symb*oversampling_symb);
 for i_beacon = 1:N_beacons
@@ -303,13 +270,13 @@ residueListRD = []; % Each column represents 1 beacon ... row-wise across beacon
 
 % Subframe level NOMP for all targets
 if model == "Toy"
-    tau = sqrt(noise_power)*N_symb*N_chirp/7; 
+    tau = sqrt(noise_power)*N_symb*N_chirp/4; 
 else
-    tau = sqrt(noise_power)*N_symb*N_chirp; 
+    tau = sqrt(noise_power)*N_symb*N_chirp/2; 
 end
 [omegaRange, omegaDoppler, gainRD, residueRD] = extractRD(y_rx,y_rd, tau ,4,window, ...
-    N_target, Rmin, Rmax, doppler_to_speed, range_axis, speed_axis,...
-    oversampling_symb, oversampling_chirp, min_val);
+    N_target, Rmin, Rmax  ,doppler_to_speed, range_axis, speed_axis,...
+    oversampling_symb, oversampling_chirp, min_val, PlotResultsFlag);
 RangeList = [RangeList,omegaRange];
 DopplerList = [DopplerList,omegaDoppler ];
 gainListRD = [gainListRD, gainRD];
@@ -472,7 +439,8 @@ load('rdEstimation');
 window = false;
 [omega_estNOMP, g_list] = angle_NOMP(RangeListNOMP, ...
     range_axis, DopplerListNOMP, speed_axis, ...
-    speed_to_doppler, N_chirp, N_symb, N_beacons, y_rx, y_rd, oversampling_chirp, A_CS);
+    speed_to_doppler, N_chirp, N_symb, N_beacons, ...
+    y_rd, oversampling_chirp, A_CS, window);
 %
 
 % Doppler Refinement 
@@ -500,23 +468,6 @@ window = false;
 % %%%
 
 %% find absolute error in range, doppler and spatial frequency estimates (in grid size)
-% (fine tuned doppler estimation not coded yet)
-detected_targets = zeros(N_target,3); % delay, doppler (coarse), spatial frequency
-true_targets = [ffreq_vect(:)*ffreq_to_range, doppler_vect(:)*doppler_to_speed,...
-    omega_vect(:)*N_tx/2/pi];
-
-% Detected targets in oversampled FFT
-detected_targets(:,1) = detected_range; % delay
-detected_targets(:,2) = N_chirp/2/pi*...
-    angle(exp(-1i*2*pi*(target_bins(:,1)-1)/N_chirp/oversampling_chirp));
-detected_targets(:,3) = omega_est*N_tx/2/pi;
-
-
-%Plot omega
-plot_omega(true_targets, detected_targets, "Oversampled FFT");
-% Plot the car image
-plot_targets_2D(true_targets, omega_vect, N_tx,...
-     N_chirp, detected_targets, "Oversampled FFT")
 
 %Plot omega from NOMP
 detected_targets = zeros(size(RangeListNOMP,1),2);

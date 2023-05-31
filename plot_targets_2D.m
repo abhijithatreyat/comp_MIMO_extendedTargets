@@ -42,9 +42,9 @@ function plot_targets_2D(true_targets,visible_cart_v, omega_vect, N_tx,...
     xlim([(min(true_x)-5), (max(true_x)+5)]);
     ylim([(min(true_y)-5), (max(true_y)+5)]);
     legend('True', 'Estimated','Radar location');
-    txt = ['True speed: ' num2str(true_speed) 'm/s'];
-    txt2 =['Estimated speed: ' num2str(det_speed) 'm/s'];
-    text(1,1,txt);
-    text(1,3,txt2);
+%     txt = ['True speed: ' num2str(true_speed) 'm/s'];
+%     txt2 =['Estimated speed: ' num2str(det_speed) 'm/s'];
+%     text(1,1,txt);
+%     text(1,3,txt2);
     title('Estimated and true targets in 2D space for' + stringVal);
 end
