@@ -55,8 +55,11 @@ y_rd_residue = y_RD;
 power_residue = reshape(sum(abs(y_rd_residue).^2,1),L*overSamplingRate_D, M*overSamplingRate_R);
 residueList = [ y_r(:)' * y_r(:) ];
 res_infoList = [];
-fig_2 = figure();
-title("Extracted Power in NOMP");
+ debug = 0;
+ if debug
+    fig_2 = figure();
+    title("Extracted Power in NOMP");
+ end
 timer = 0;
 subplot_i = 1;
 res_inf_normSq_rot = 1e10;
@@ -77,9 +80,11 @@ while timer<20
     res_infoList = [res_infoList ; res_inf_normSq_rot];
     
     % residue
-   subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
-                fig_2, Rmin, Rmax, doppler_to_speed, subplot_i, minVal);
-
+   
+    if(debug)
+        subplot_i = plotResidue(power_residue, timer,  range_axis, speed_axis,...
+            fig_2, Rmin, Rmax, doppler_to_speed, subplot_i, minVal);
+    end
     % newly detected sinusoid is coarse - so we refine it to 
     % imitate detection on the continuum
     for i = 1:numRefine

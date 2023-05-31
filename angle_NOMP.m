@@ -1,10 +1,22 @@
 
 
 
-function omega_estNOMP = angle_NOMP( RangeListNOMP, range_axis, DopplerListNOMP, speed_axis, speed_to_doppler, N_chirp, N_symb, N_beacons, y_rx, y_rd, oversampling_chirp, A_CS)
+function [omega_estNOMP,g_estNOMP] = angle_NOMP( RangeListNOMP, range_axis, DopplerListNOMP, ...
+    speed_axis, speed_to_doppler, N_chirp, N_symb, N_beacons, ...
+     y_rd, oversampling_chirp, A_CS, window)
+
+% Generate the patch based model
+% This generates a patch of range and doppler values beteween the 
+% estimates range values
+% Density of patch is proportional to closeness of target
+density = 2*max(range_axis)/mean(RangeListNOMP);
+% RangeListNOMP = linspace(min(RangeListNOMP),max(RangeListNOMP),density);
+% DopplerListNOMP = linspace(min(DopplerListNOMP),max(DopplerListNOMP),density);
 
 NOMP_targts = size(RangeListNOMP,1);
-omega_estNOMP = zeros(NOMP_targts,1);
+omega_estNOMP = [];
+g_estNOMP = [];
+
 % Estimate the doppler drift on average
 %dop_i = mean((DopplerListNOMP)*2*pi/N_chirp/oversampling_chirp);
 
@@ -33,10 +45,19 @@ omega_estNOMP = zeros(NOMP_targts,1);
         % Estimate doppler phase drift across all subframes/beacons
         dop_i = (target_binsNOMP(i_bin,1)-1)*2*pi/N_chirp/oversampling_chirp;
         y_b = y_b.*exp(-1i*dop_i*N_chirp*(0:N_beacons-1)');
-        
-        tau = norm(y_b)^2/7;
-        [om_list, g_list, r_list] = extractSpectrum_MR(y_b, A_CS, tau, 8, 6);
-        omega_estNOMP(i_bin) = angle(exp(1i*om_list(1)));
-    
     end
+    % Find the unique bins in Range list
+    unique_range_bins = unique(target_binsNOMP(:,2),'stable');
+    [~,closestIdx] = min(abs(range_axis(unique_range_bins)-RangeListNOMP));
+    unique_ranges = RangeListNOMP(closestIdx);
+
+    for j = 1: length(unique_ranges)
+        tau = norm(y_b)^2/7;
+        [om_list, g_list, r_list] = extractSpectrum_MR(y_b, A_CS, tau, 8, 6,window, unique_ranges(j));
+       
+        omega_estNOMP(j,:) = angle(exp(1i*om_list(1:4)));
+        %omega_estNOMP(i_bin) = om_list(1);
+        g_estNOMP = abs(g_list(1));
+    end
+   
 end

@@ -1,7 +1,7 @@
 close all;
 clear;
 clc;
-rng(2);
+rng(1);
 single_run = true;
 monte_carlo_run = false;
 
@@ -151,7 +151,21 @@ N_points = numel(sph_vector(:,1));
 true_range = sph_vector(:,3)'; % Range coming from (R,theta,phi) 
 true_range = true_range(true_range>Rmin & true_range<= Rmax);
 
-omega_vect = sph_vector(:,1)'; % Azimuth cmg from (R,theta,phi)
+speed_to_doppler = 2*pi*(ts*(N_symb+T_gap))/lambda;
+min_speed = min_doppler *speed_to_doppler; % m/s
+max_speed = max_doppler *speed_to_doppler; % m/s
+com_velocity = min_speed + (max_speed - min_speed)...
+    .*mean(true_range)/max(true_range).*rand([1,2]);
+
+min_omega = -pi/2;
+max_omega = pi/2;
+azimuth_vec = sph_vector(:,1);
+azimuth_vec = azimuth_vec(azimuth_vec>min_omega & azimuth_vec<= max_omega);
+true_range = true_range(azimuth_vec>min_omega & azimuth_vec<= max_omega);
+azimuth_to_omega = 2*pi* array_spacing/lambda;
+%omega_vect =  azimuth_to_omega * sin(azimuth_vec'); % Azimuth cmg from (R,theta,phi)
+omega_vect = azimuth_vec'; % Azimuth cmg from (R,theta,phi)
+
 
 % Doppler vector generation
 % COM moves in a random direction in X-Y plane
@@ -165,6 +179,8 @@ clear min_speed max_speed;
 % Calculate radial velocity of each point in the point cloud
 % Dot product between the velocity vector and each point
 [cart_x,cart_y,cart_z] = sph2cart(sph_vector(:,1), sph_vector(:,2), sph_vector(:,3));
+
+%com_velocity = [0.2476, -6.3747] *speed_to_doppler ./ [mean(cart_x),mean(cart_y)] ;
 
 doppler_vect = (com_velocity*[cart_x';cart_y']);
 
@@ -258,6 +274,8 @@ if PlotResultsFlag
     title('aggregate bin power');
 end
 
+% save the session
+save("preEstimation");
 % 
 % figure;
 % h = surf(range_axis,speed_axis,20*log10(power_bins.*CFAR_mat));
@@ -270,7 +288,8 @@ end
 %%% find the (N_points + extra_bins) strongest components in range-doppler
 %%% signal. This part is a crude version of NOMP crude and will be cleaned
 %%% up in next version.
-
+load("preEstimation");
+window = false;
 extra_bins = floor(log(N_target));
 target_bins = zeros(N_target+extra_bins,2);
 
@@ -301,6 +320,13 @@ residueListRD = [residueListRD, residueRD];
 RangeListNOMP = RangeList .* ffreq_to_range ./ts;
 DopplerListNOMP = DopplerList .* doppler_to_speed;
 
+% true_targets = [ffreq_vect(:)*ffreq_to_range, doppler_vect(:)*doppler_to_speed,...
+ %    asin(omega_vect(:)/azimuth_to_omega)*180/pi;];
+
+
+ true_targets = [ffreq_vect(:)*ffreq_to_range, doppler_vect(:)*doppler_to_speed,...
+     omega_vect(:)*180/pi;];
+
 % Filter the data
 % if model ~= "Toy"
 %     % Filter out the range values more than size of the car
@@ -324,24 +350,84 @@ DopplerListNOMP = DopplerList .* doppler_to_speed;
 
 % plot_NOMP_results(PlotResultsFlag, ffreq_vect, doppler_vect, ffreq_to_range, doppler_to_speed, ...
 %     RangeList, DopplerList, gainListRD, Rmin, Rmax);
+save("pre_OS");
+%% OS FFT
+load("pre_OS");
+if(single_run)
 
-%%%%
+    % Oversampled FFT with CFAR detection
+    guardBandSize = 2;
+    trainingBandSize = 20;
+    pfa_ = 1e-3;
+    det_ = guardBandSize + trainingBandSize+1;
+    %%% Window the signal in range and doppler domain
+    for beacon_i = 1:N_beacons
+        for chirp_i = 1:N_chirp
+            y_rx(beacon_i,chirp_i,:)  = reshape(y_rx(beacon_i,chirp_i,:),N_symb,1).* ...
+                kaiser(N_symb,10);
+        end
+    
+        for syms_i = 1:N_symb
+            y_rx(beacon_i,:,syms_i)= reshape(y_rx(beacon_i,:,syms_i),N_chirp,1).*...
+                kaiser(N_chirp,10);
+        end
+    end
 
-power_residue = power_bins; % updated after each peak is identified and subtracted
-y_residue = y_rx; % updated after each peak is identified and subtracted
-y_rd_residue = y_rd; % updated after each peak is identified and subtracted
-detected_range = [];
-if PlotResultsFlag
-    fig_2 = figure();
-    subplot(num_subplot_rows,num_subplot_cols,1);
-end 
+    %%% evaluate range-doppler domain signal ( 2D FFT)
+    y_rd = zeros(N_beacons, N_chirp*oversampling_chirp, N_symb*oversampling_symb);
+    for i_beacon = 1:N_beacons
+        y_rd(i_beacon,:,:) = reshape(fft2(reshape(y_rx(i_beacon,:,:),N_chirp,N_symb), ...
+                             N_chirp*oversampling_chirp,N_symb*oversampling_symb),1 ...
+                            ,N_chirp*oversampling_chirp,N_symb*oversampling_symb);
+    end
 
-[target_bins, detected_range] = extract_targets(N_target,power_bins, ...
-    extra_bins, power_residue, N_symb, oversampling_symb,...
-    N_chirp, oversampling_chirp, y_residue, y_rd_residue,...
-    N_beacons, ffreq_to_range, ts, PlotResultsFlag, fig_2,  ...
-    num_subplot_rows, num_subplot_cols, Rmin, Rmax, doppler_to_speed,...
-    range_axis, speed_axis, min_val, peak_power,window);
+    power_bins = reshape(sum(abs(y_rd).^2,1),N_chirp*oversampling_chirp, ...    
+                     N_symb*oversampling_symb);
+
+    % Removing 0 doppler bins 
+    columnsToDelete =  any(abs(speed_axis)<0.17, 1);
+    DopplerAxis_noZero = speed_axis;
+    DopplerAxis_noZero(columnsToDelete) = [];
+    MeanClutter_RD = squeeze(power_bins);
+    MeanClutter_RD(columnsToDelete,:) = [];
+
+    if PlotResultsFlag
+        figure();
+        h = surf(range_axis,DopplerAxis_noZero,20*log10(MeanClutter_RD));
+        set(h,'edgecolor','none'); view(2);
+        xlim([Rmin-1,Rmax+1]); ylim([-1,1]*pi*doppler_to_speed)
+        xlabel('range (m)'); ylabel('radial speed (m/s)');
+        title('windowing');
+    end
+
+    [columnInds,rowInds] = meshgrid(det_:length(DopplerAxis_noZero)-det_,det_:length(range_axis)-det_);
+    cfar2D = phased.CFARDetector2D('GuardBandSize',guardBandSize,'TrainingBandSize',trainingBandSize,...
+        'ProbabilityFalseAlarm',pfa_);
+    CUTIdx = [rowInds(:) columnInds(:)]';
+    detections = cfar2D(MeanClutter_RD,CUTIdx);
+    %helperDetectionsMap(power_bins,range_axis,speed_axis,[20,length(range_axis)-20],[20,length(speed_axis)-20],detections);
+
+    cfar_cells = CUTIdx(:,detections);
+    target_bins = cfar_cells';
+    N_target = size(target_bins,1);
+%-------------------------------------------------------------
+%------------------------------------------------------------
+
+%     power_residue = power_bins; % updated after each peak is identified and subtracted
+%     y_residue = y_rx; % updated after each peak is identified and subtracted
+%     y_rd_residue = y_rd; % updated after each peak is identified and subtracted
+%     detected_range = [];
+%     fig_2 = figure();
+%     if PlotResultsFlag
+%         subplot(num_subplot_rows,num_subplot_cols,1);
+%     end
+% 
+%     [target_bins, detected_range] = extract_targets(N_target,power_bins, ...
+%         extra_bins, power_residue, N_symb, oversampling_symb,...
+%         N_chirp, oversampling_chirp, y_residue, y_rd_residue,...
+%         N_beacons, ffreq_to_range, ts, PlotResultsFlag, fig_2,  ...
+%         num_subplot_rows, num_subplot_cols, Rmin, Rmax, doppler_to_speed,...
+%         range_axis, speed_axis, min_val, peak_power,window);
 
     %Plot the RD results
     plotRD_grid(ffreq_vect, ffreq_to_range, doppler_vect,...
@@ -349,14 +435,42 @@ end
         target_bins, N_chirp, oversampling_chirp, power_bins,...
         peak_power, RangeListNOMP, DopplerListNOMP, residueListRD);
 
+    omega_est = angle_OSFFT(N_target, target_bins,...
+        y_rd, N_chirp, oversampling_chirp, N_beacons, A_CS, window, ...
+        range_resolution);
+
+    detected_targets = zeros(N_target,2); % delay, doppler (coarse), spatial frequency
+
+    % Detected targets in oversampled FFT
+    detected_targets(:,1) = target_bins(:,2)*range_resolution; % delay
+    w_doppler = angle(exp(-1i*2*pi*(target_bins(:,1)-1)/N_chirp/oversampling_chirp));
+    detected_targets(:,2) = doppler_to_speed*w_doppler;
+    detected_angles = omega_est*180/pi;
+    
+    
+    %Plot omega
+    plot_omega(true_targets, detected_targets, detected_angles, "Oversampled FFT");
+    %Plot the car image
+    g_list = zeros(N_target,1);
+    plot_targets_2D(true_targets,visible_cart_v , omega_vect, N_tx,...
+        N_chirp, detected_targets,detected_angles, g_list, "Oversampled FFT");
+else
+    target_bins = [];
+    plotRD_grid(ffreq_vect, ffreq_to_range, doppler_vect,...
+        doppler_to_speed, range_resolution, doppler_resolution, ...
+        target_bins, N_chirp, oversampling_chirp, power_bins,...
+        peak_power, RangeListNOMP, DopplerListNOMP, residueListRD);
+end
 %%% now find the direction of each target (or targets inside each
 %%% identified bin, for now just assuming one target in each bin)
-omega_est = angle_OSFFT(N_target, target_bins,...
-    y_rd, N_chirp, oversampling_chirp, N_beacons, A_CS);
-%%%%
-% Estimate angle from NOMP-RD
 
-omega_estNOMP = angle_NOMP(RangeListNOMP, ...
+
+save('rdEstimation');
+%%
+% Estimate angle from NOMP-RD
+load('rdEstimation');
+window = false;
+[omega_estNOMP, g_list] = angle_NOMP(RangeListNOMP, ...
     range_axis, DopplerListNOMP, speed_axis, ...
     speed_to_doppler, N_chirp, N_symb, N_beacons, y_rx, y_rd, oversampling_chirp, A_CS);
 %
@@ -405,14 +519,24 @@ plot_targets_2D(true_targets, omega_vect, N_tx,...
      N_chirp, detected_targets, "Oversampled FFT")
 
 %Plot omega from NOMP
-detected_targets = zeros(size(RangeListNOMP,1),3);
+detected_targets = zeros(size(RangeListNOMP,1),2);
+
 detected_targets(:,1) = RangeListNOMP;
 detected_targets(:,2) = DopplerListNOMP;
-detected_targets(:,3) = omega_estNOMP*N_tx/2/pi;
-plot_omega(true_targets, detected_targets, "NOMP");
-plot_targets_2D(true_targets, omega_vect, N_tx,...
-     N_chirp, detected_targets, "NOMP");
+% Filter omega_estNOMP 
+% z_score_w = abs (abs((omega_estNOMP - mean(omega_estNOMP))) /mean(omega_estNOMP));
+% omega_estNOMP = omega_estNOMP(z_score_w <= 1);
 
+%detected_angles = (asin((omega_estNOMP)/azimuth_to_omega))*180/pi;
+detected_angles = omega_estNOMP*180/pi;
+detected_angles = repmat(detected_angles , size(RangeListNOMP,1) , 1);
+
+if(PlotResultsFlag)
+    plot_omega(true_targets, detected_targets,detected_angles, "NOMP");
+    
+    plot_targets_2D(true_targets,visible_cart_v, omega_vect, N_tx,...
+         N_chirp, detected_targets,detected_angles, g_list, "NOMP");
+end
 % error_mat = zeros(N_target,3);
 % % for each true target, look for closest match in estimated targets and
 % % compute error
@@ -442,31 +566,28 @@ doppler_min = min(doppler_vect*doppler_to_speed);
 doppler_max = max(doppler_vect*doppler_to_speed);
 ylim([doppler_min-2 , doppler_max+2]); 
 
-ind_row = target_bins(:,1);
-ind_col = target_bins(:,2);
-w_doppler = angle(exp(-1i*2*pi*(ind_row-1)/N_chirp/oversampling_chirp)); 
-marker_size = 30 + 50 * power_bins(sub2ind(size(power_bins), ind_row, ind_col)) / peak_power;
-x = (ind_col-1)*range_resolution;
-y = w_doppler * doppler_to_speed;
-scatter(x', y', int16(marker_size'), 'rx','LineWidth', 2);
-
+if(~isempty(target_bins))
+    ind_row = target_bins(:,1);
+    ind_col = target_bins(:,2);
+    w_doppler = angle(exp(-1i*2*pi*(ind_row-1)/N_chirp/oversampling_chirp));
+    marker_size = 40 + 50 * power_bins(sub2ind(size(power_bins), ind_row, ind_col)) / peak_power;
+    x = (ind_col-1)*range_resolution;
+    y = w_doppler * doppler_to_speed;
+    scatter(x', y', int16(marker_size'), 'kx','LineWidth', 2);
+end
 
 % w_doppler = angle(exp(-1i*2*pi*(target_bins(:,1)'-1)/N_chirp/oversampling_chirp)); 
 % plot((target_bins(:,2)'-1)*range_resolution,w_doppler ...
 %     *doppler_to_speed,'rx','LineWidth',2, 'MarkerSize', ...
 %             5+5*power_bins(ind_row,ind_col)/peak_power);
 
-marker_size = 30 + 50 * residueRD / max(residueRD);
-scatter(RangeListNOMP, DopplerListNOMP, marker_size, 'm+', 'LineWidth', 2 );
+marker_size = 130 + 50 * residueRD / max(residueRD);
+scatter(RangeListNOMP, DopplerListNOMP, marker_size, 'ro', 'LineWidth', 2 );
 
 
 xlabel('range (m)'); ylabel('radial speed (m/s)');
 title('Range doppler Estimates');
 grid on;
-xticks(range_min:10*range_resolution:range_max); 
-yticks(doppler_min:10*doppler_resolution:doppler_max);
-hold off;
-
 legend('True targets', 'Oversampled FFT', 'NOMP');
 
 end

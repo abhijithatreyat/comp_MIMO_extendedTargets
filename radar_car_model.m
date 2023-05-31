@@ -18,7 +18,7 @@ function [sph_n,com, normals] = car_model(model,range_translation , angle_thresh
     k = 6; % nearest neighbours to consider for change in normal
     car_v = loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc);
 
-    car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc);
+    [car_scene_v,fig_1]  = rotateAndTranslate(car_v,range_translation, disp_pc);
 
     %Find the center of mass of the point cloud (Mean)
     com = mean(car_scene_v.cart_v);
@@ -31,7 +31,7 @@ function [sph_n,com, normals] = car_model(model,range_translation , angle_thresh
         model_reflectors(visible_cart_v, threshold, k, disp_pc, angle_threshold);
 
      % Hawkeye model
-     blb_cart_v = model_point_reflector(visible_cart_v,car_scene_v.bbox, disp_pc);
+     blb_cart_v = model_point_reflector(visible_cart_v,car_scene_v.bbox,fig_1, disp_pc);
 
     if model == "edge"
         [sph_n(:,1),sph_n(:,2),sph_n(:,3)] = cart2sph(strong_reflectors(:,1),strong_reflectors(:,2),strong_reflectors(:,3));
@@ -76,7 +76,7 @@ function car_v= loadCarPointCloud(path_to_pointCloud, CAD_idx , disp_pc)
     clear cart_v bbox N_pt car_idx;
 end
 
-function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
+function [car_scene_v,fig_1] = rotateAndTranslate(car_v,range_translation, disp_pc)
     car_scene_v = car_v;
     variable_library;
     %% Rotate     
@@ -99,8 +99,8 @@ function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
     %translate_x_rng = (translate_lim(1,1) - car_scene_v.lim(1,1)):translate_x_res:(translate_lim(1,2) - car_scene_v.lim(2,1)); 
     %translate_y_rng = (translate_lim(2,1) - car_scene_v.lim(1,2)):translate_y_res:(translate_lim(2,2) - car_scene_v.lim(2,2));
     % randomly select a translation distances
-    translate_x = floor((-0.5 + rand(1))*range_translation*1000); % in mm
-    translate_y = floor(rand(1)*range_translation*1000); % in mm
+    translate_x = floor(1000 + rand(1)*range_translation*1000); % in mm
+    translate_y = floor((rand(1))*range_translation*1000); % in mm
     translate_z = 0;
 
     % translate
@@ -115,18 +115,20 @@ function car_scene_v = rotateAndTranslate(car_v,range_translation, disp_pc)
     
     if(disp_pc)
         % Visulize the rotated and translated point cloud
-        figure; 
-        cart_v_plot = car_scene_v.cart_v; % downsampling when plotting
-        scatter3(cart_v_plot(:,1),cart_v_plot(:,2),cart_v_plot(:,3),10,'filled','k'); hold on;
-        scatter3(car_scene_v.bbox(:,1), car_scene_v.bbox(:,2),car_scene_v.bbox(:,3),'r'); hold on;
+        fig_1 = figure(); 
+        cart_v_plot = car_scene_v.cart_v; % downsampling when 
+        scatter3(cart_v_plot(:,1),cart_v_plot(:,2),cart_v_plot(:,3),10,'Color',[128, 128, 128]); hold on;
+        scatter3(car_scene_v.bbox(:,1), car_scene_v.bbox(:,2),car_scene_v.bbox(:,3),'red');
+        hold on;
         xlabel('x (m)'); ylabel('y (m)'); zlabel('z (m)'); axis equal;
       
         xlim([min(cart_v_plot(:,1))-4 max(cart_v_plot(:,1))+4]);
-        ylim([0 max(cart_v_plot(:,2))+2]);
+        ylim([min(cart_v_plot(:,2))-4 max(cart_v_plot(:,2))+2]);
         zlim([0 max(cart_v_plot(:,3))+2]);
         set(gca,'FontSize',10) % Creates axes
         view([-12,14]);
         title('Rotated and translated point cloud');
+        hold on;
     end
 end
 
