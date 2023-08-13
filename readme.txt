@@ -17,3 +17,13 @@ extract_targets.m - Oversampled FFT extraction of Range and doppler
 radar_car_model.m - Converts the point cloud of a car into range, doppler and azimuth values
 generate_received_signal.m - Generate the received signal in 1 frame from range, doppler values 
 CAD folder contains the point cloud info about the cars in different scenarios
+
+
+Contributions
+This repository is a collaborative effort that brings together the expertise of multiple contributors. The following authors have made significant contributions:
+
+Abhijith Atreya: Owner of the repository. Wrote the core simulation script, which orchestrates the entire simulation process. Additionally, contributed to various helper functions that enable the simulation to model and analyze a MIMO radar system effectively.
+
+Maryam Eslami Rasekh: Original author who introduced the concept of compressive MIMO radar using NOMP algorithm. Her groundbreaking work has led to the development of the extractSpectrum_MR.m function, which leverages 1D NOMP techniques for angle estimation.
+
+Anant Gupta:  The 2D NOMP algorithm integrated into the following code has been inspired by his prior work. The function 'extract_RD.m' extends the concept of NOMP to the range-doppler domain, offering a comprehensive 2D NOMP approach for range and Doppler estimation.
